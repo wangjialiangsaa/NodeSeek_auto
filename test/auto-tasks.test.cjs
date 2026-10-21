@@ -1,0 +1,188 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const {JSDOM}=require('jsdom');
+const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
+const settingsKey='nsit-auto-settings-v1';
+const future=Date.UTC(2030,0,1);
+
+function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,confirmReply=true}={}) {
+  const href=link??`https://www.nodeseek.com/lucky?post=123&time=${future}&count=1&start=1`;
+  const dom=new JSDOM(`<html><head></head><body><article class="content-item" id="0"><a class="author-name" href="/space/8">OP</a><div class="post-content"><a href="${href}">抽奖链接</a></div></article><div id="editor"><div class="md-editor"><div id="editor-body"><div class="window_header"><div>内容 预览 对照</div><div><a href="https://www.runoob.com/markdown/md-tutorial.html">支持 Markdown</a></div></div><textarea aria-label="发言栏"></textarea></div><div class="topic-select"><button class="submit" type="button">发布评论</button></div></div></div></body></html>`,{url,runScripts:'outside-only',pretendToBeVisual:true});
+  const w=dom.window,d=w.document,requests=[],historyRequests=[],posts=[];
+  const observers=[],NativeObserver=w.MutationObserver;
+  w.MutationObserver=class extends NativeObserver {constructor(fn){super(fn);observers.push(this);}};
+  let runtime;
+  t.after(()=>{runtime?.disconnect?.();observers.forEach(o=>o.disconnect());w.close();});
+  if(!storage.has(settingsKey))storage.set(settingsKey,settings);
+  w.GM_getValue=(key,fallback)=>storage.has(key)?structuredClone(storage.get(key)):fallback;
+  w.GM_setValue=(key,value)=>storage.set(key,structuredClone(value));
+  w.GM_addStyle=css=>{const s=d.createElement('style');s.textContent=css;d.head.append(s);};
+  w.GM_registerMenuCommand=()=>{};w.__NSIT_VENDOR_ASSET__=()=>'';
+  w.matchMedia=()=>({matches:false,addEventListener(){}});
+  Object.defineProperty(w.navigator,'locks',{configurable:true,value:{async request(name,options,callback){
+    if(locks.has(name))return callback(null);locks.add(name);
+    try{return await callback({name});}finally{locks.delete(name);}
+  }}});
+  w.__config__={user:uid?{member_id:uid}:null,postData:{postId:123,op:{uid:8},comments:[{floorIndex:0,poster:{uid:8},markdown:`[抽奖](${href})`}]}};
+  w.fetch=async(...args)=>{
+    if(String(args[0]).startsWith('/api/content/list-comments')){historyRequests.push(args);return historyFetch?historyFetch(...args):{ok:true,status:200,json:async()=>({success:true,comments:[]})};}
+    requests.push(args);return fetch?fetch(...args):{ok:true,status:200,json:async()=>({success:true,message:'签到成功'})};
+  };
+  const input=d.querySelector('#editor-body>textarea');input.value=draft;
+  d.querySelector('.submit').addEventListener('click',()=>{
+    posts.push(input.value);
+    if(confirmReply){w.__config__.postData.comments.push({floorIndex:1,poster:{uid,isMe:true},markdown:input.value});input.value='';}
+  });
+  const source=['config.js','ui.js','logic.js','toolbar.js','auto-tasks.js'].map(file=>{
+    const full=path.join(__dirname,'..','src',file);return fs.existsSync(full)?fs.readFileSync(full,'utf8'):'';
+  }).join('\n');
+  w.eval(`(function(){${source}\nwindow.testApi={createApp,installToolbar:typeof installEditorToolbar==='function'?installEditorToolbar:null,installAuto:typeof installAutomaticTasks==='function'?installAutomaticTasks:null,openSettings:typeof openAutomaticTaskSettings==='function'?openAutomaticTaskSettings:null};})();`);
+  const app=w.testApi.createApp({replyMode:true});app._nsitEditor=d.querySelector('#editor-body');d.querySelector('.window_header>div:last-child').prepend(app);
+  function install(){assert.equal(typeof w.testApi.installAuto,'function','automatic tasks module exists');runtime=w.testApi.installAuto({autoStart:false});return runtime;}
+  return {w,d,app,input,posts,requests,historyRequests,storage,install,get runtime(){return runtime;}};
+}
+
+test('compact toolbar toggle preserves button labels and dismisses on Escape/outside click',async t=>{
+  const h=setup(t),{w,d,app}=h;
+  const sell=app.querySelector('.nsit-trigger'),image=app.querySelector('.nsit-image-trigger'),editor=h.input;
+  assert.equal(typeof w.testApi.installToolbar,'function');w.testApi.installToolbar(app);
+  const toggle=app.querySelector('[data-nsit-tools-toggle]'),panel=app.querySelector('[data-nsit-tools-panel]');
+  assert.ok(toggle);assert.equal(panel.hidden,true);assert.ok(panel.contains(sell));assert.ok(panel.contains(image));
+  assert.equal(sell.textContent,'出🐔模板');assert.equal(image.textContent,'上传图片');
+  assert.ok(panel.contains(app.querySelector('[data-nsit-image-status]')));
+  assert.equal(d.querySelector('#editor-body>textarea'),editor);
+  assert.ok(d.querySelector('.window_header a[href*="runoob"]'));
+  toggle.click();assert.equal(toggle.getAttribute('aria-expanded'),'true');assert.equal(panel.hidden,false);
+  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(panel.hidden,true);
+  toggle.click();d.body.click();assert.equal(panel.hidden,true);
+  w.testApi.installToolbar(app);assert.equal(app.querySelectorAll('[data-nsit-tools-toggle]').length,1);
+});
+
+test('automatic task settings start with an empty phrase and prevent enabling an empty reply',async t=>{
+  const h=setup(t);h.install();assert.equal(typeof h.w.testApi.openSettings,'function');h.w.testApi.openSettings();
+  const dialog=h.d.querySelector('[data-nsit-auto-dialog]');assert.ok(dialog);
+  const phrase=dialog.querySelector('[name="replyText"]'),enabled=dialog.querySelector('[name="autoReply"]');
+  assert.equal(phrase.value,'');assert.equal(enabled.checked,false);
+  enabled.checked=true;dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.match(dialog.textContent,/请填写/);assert.equal(h.posts.length,0);
+  phrase.value='祝大家好运！';dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(h.storage.get(settingsKey).replyText,'祝大家好运！');
+});
+
+test('enabled lottery reply uses native submit once and does not require an API guess',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'感谢分享！'}});const runtime=h.install();
+  await runtime.run();await runtime.run();
+  assert.deepEqual(h.posts,['感谢分享！'],JSON.stringify(runtime.status));assert.equal(h.requests.length,0);
+});
+
+for(const [name,options] of [
+  ['ordinary thread',{link:'https://www.nodeseek.com/post-555-1'}],
+  ['external lottery URL',{link:`https://example.com/lucky?post=123&time=${future}`}],
+  ['other thread lottery',{link:`https://www.nodeseek.com/lucky?post=999&time=${future}`}],
+  ['expired lottery',{link:'https://www.nodeseek.com/lucky?post=123&time=1600000000000'}],
+  ['occupied draft',{draft:'我正在写的回复'}],
+  ['logged out',{uid:0}],
+])test(`auto reply skips ${name}`,async t=>{
+  const h=setup(t,{...options,settings:{dailyCheckin:false,autoReply:true,replyText:'感谢分享！'}});const before=h.input.value;
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,before);
+});
+
+test('own threads and already replied threads are skipped',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢！'}});const runtime=h.install();
+  h.w.__config__.postData.op.uid=7;await runtime.run();assert.equal(h.posts.length,0);
+  h.w.__config__.postData.op.uid=8;h.w.__config__.postData.comments.push({floorIndex:2,poster:{uid:7},markdown:'旧回复'});
+  await runtime.run();assert.equal(h.posts.length,0);
+});
+
+test('reply waits for history and skips an older reply outside loaded comments',async t=>{
+  let resolveHistory;const pending=new Promise(resolve=>{resolveHistory=resolve;});
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},historyFetch:()=>pending});
+  const run=h.install().run();await tick();assert.equal(h.posts.length,0);assert.equal(h.historyRequests.length,1);
+  resolveHistory({ok:true,status:200,json:async()=>({success:true,comments:[{post_id:123,floor_id:25}]})});
+  await run;assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+});
+
+test('history lookup follows pages and blocks replies on errors or incomplete history',async t=>{
+  const settings={dailyCheckin:false,autoReply:true,replyText:'谢谢'};
+  const a=setup(t,{settings,historyFetch:async url=>({ok:true,status:200,json:async()=>({success:true,comments:new URL(url,'https://www.nodeseek.com').searchParams.get('page')==='1'?[{post_id:999,floor_id:1}]:[]})})});
+  await a.install().run();assert.equal(a.historyRequests.length,2);assert.equal(a.posts.length,1);
+  const b=setup(t,{settings,historyFetch:async()=>({ok:false,status:503,json:async()=>({success:false})})});
+  const runtime=b.install();await runtime.run();await runtime.run();assert.equal(b.posts.length,0);assert.equal(b.historyRequests.length,1);
+  const c=setup(t,{settings,historyFetch:async()=>({ok:true,status:200,json:async()=>({success:true,comments:[{post_id:999,floor_id:1}]})})});
+  await c.install().run();assert.equal(c.posts.length,0);assert.equal(c.historyRequests.length,10);
+});
+
+test('typing a draft while history loads preserves it and cancels automatic posting',async t=>{
+  let resolveHistory;const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},historyFetch:()=>new Promise(resolve=>{resolveHistory=resolve;})});
+  const run=h.install().run();await tick();h.input.value='正在输入的新草稿';
+  resolveHistory({ok:true,status:200,json:async()=>({success:true,comments:[]})});await run;
+  assert.equal(h.posts.length,0);assert.equal(h.input.value,'正在输入的新草稿');
+});
+
+test('uncertain submissions are never automatically repeated after reload',async t=>{
+  const storage=new Map();const options={storage,settings:{dailyCheckin:false,autoReply:true,replyText:'祝好运！'},confirmReply:false};
+  const a=setup(t,options);await a.install().run();assert.equal(a.posts.length,1);
+  const b=setup(t,options);await b.install().run();assert.equal(b.posts.length,0);
+});
+
+test('multiple tabs share the reply lock and persistent account scoped record',async t=>{
+  const storage=new Map(),locks=new Set(),settings={dailyCheckin:false,autoReply:true,replyText:'接好运！'};
+  const a=setup(t,{storage,locks,settings}),b=setup(t,{storage,locks,settings});
+  await Promise.all([a.install().run(),b.install().run()]);assert.equal(a.posts.length+b.posts.length,1);
+  const c=setup(t,{storage,locks,settings,uid:9});await c.install().run();assert.equal(c.posts.length,1);
+});
+
+test('daily checkin validates JSON, runs once per Beijing day and uses fixed rewards',async t=>{
+  let now=Date.UTC(2026,9,20,15,59);const h=setup(t,{settings:{dailyCheckin:true}});h.w.Date.now=()=>now;const runtime=h.install();
+  await runtime.run();await runtime.run();assert.equal(h.requests.length,1);
+  assert.equal(h.requests[0][0],'/api/attendance?random=false');assert.equal(h.requests[0][1].method,'POST');
+  assert.equal(h.requests[0][1].credentials,'same-origin');
+  now+=2*60*1000;await runtime.run();assert.equal(h.requests.length,2);
+});
+
+test('HTTP 200 with unsuccessful JSON is not cached as attendance success',async t=>{
+  let success=false;const h=setup(t,{settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success,message:success?'签到成功':'请稍后再试'})})});
+  let now=Date.UTC(2026,9,21);h.w.Date.now=()=>now;const runtime=h.install();await runtime.run();
+  success=true;now+=6*60*1000;await runtime.run();assert.equal(h.requests.length,2);
+  await runtime.run();assert.equal(h.requests.length,2);
+});
+
+test('server already-signed response is terminal for the day',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success:false,message:'今天已经签到过了'})})});
+  const runtime=h.install();await runtime.run();await runtime.run();assert.equal(h.requests.length,1);
+});
+
+test('not-yet-signed server messages remain retryable failures',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success:false,message:'今日未签到，请稍后重试'})})});
+  let now=Date.UTC(2026,9,21);h.w.Date.now=()=>now;const runtime=h.install();
+  await runtime.run();now+=6*60*1000;await runtime.run();assert.equal(h.requests.length,2);
+  assert.equal(h.storage.get('nsit-auto-checkin-v1-7').done,false);
+});
+
+test('changing the configured phrase before submission cancels the pending reply',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'旧语句'}});
+  h.input.addEventListener('input',()=>h.storage.set(settingsKey,{dailyCheckin:false,autoReply:true,replyText:'新语句'}),{once:true});
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+});
+
+test('a draw that expires while preparing is not submitted',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'祝好运'}});
+  h.input.addEventListener('input',()=>{h.w.Date.now=()=>future+1;},{once:true});
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+});
+
+test('stalled attendance times out and does not prevent the reply task',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:true,autoReply:true,replyText:'祝好运'},fetch:(_url,options)=>new Promise((resolve,reject)=>{
+    options.signal.addEventListener('abort',()=>reject(new Error('request aborted')),{once:true});
+  })});
+  const nativeTimeout=h.w.setTimeout.bind(h.w);h.w.setTimeout=(fn,delay,...args)=>nativeTimeout(fn,delay===20000?5:delay,...args);
+  await h.install().run();assert.equal(h.requests.length,1);assert.equal(h.posts.length,1);
+  assert.equal(h.storage.get('nsit-auto-checkin-v1-7').done,false);
+});
+
+test('no login, disabled attendance, or missing task lock causes no attendance request',async t=>{
+  const a=setup(t,{uid:0,settings:{dailyCheckin:true}});await a.install().run();assert.equal(a.requests.length,0);
+  const b=setup(t);await b.install().run();assert.equal(b.requests.length,0);
+  const c=setup(t,{settings:{dailyCheckin:true}});Object.defineProperty(c.w.navigator,'locks',{value:undefined});await c.install().run();assert.equal(c.requests.length,0);
+});

@@ -604,13 +604,16 @@
     // 放在所有内部委托处理器之后：先让脚本自己的交互处理完，再截断冒泡到站点编辑器的事件
     if (insidePrivateMessageToolbar) isolateSiteEditorHandlers(app);
     applyEditorFeatureFlags(app);
+    installEditorToolbar(app);
   }
 
   const threadedReading = installThreadedReading();
   injectBaseStyles();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
+  const automaticTasks = installAutomaticTasks();
   const observer = new MutationObserver(() => {
+    automaticTasks.schedule();
     renderLuckyTrigger();
     runLuckyWriteback();
     showLuckyWritebackResult();
@@ -647,3 +650,4 @@
 
   // 功能开关挂在油猴菜单里：编辑页、帖子页、列表页都能打开同一个设置框
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
+  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
