@@ -2852,35 +2852,58 @@
     return panel;
   }
 
-  function openPostFilterPanel() {
+  function openPostFilterPanel(tab) {
     const panel = ensurePostFilterPanel();
+    if (tab === 'block' || tab === 'highlight') panel._nsitPostFilterState = { tab, query: '', editingId: '' };
     panel.classList.add('is-open');
     renderPostFilterPanel();
   }
 
   function ensurePostFilterTrigger() {
     if (!featureEnabled('postFilter')) {
-      document.querySelector('[data-nsit-post-filter-trigger]')?.remove();
-      document.querySelector('[data-nsit-post-filter-panel]')?.remove();
+      document.querySelectorAll('[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
       return;
     }
+    const iconPath = '<path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>';
+    const icon = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">${iconPath}</svg>`;
     const head = document.querySelector('#nsk-head');
-    if (!head || head.querySelector('[data-nsit-post-filter-trigger]')) return;
-    let group = head.querySelector('[data-nsit-post-filter-icon-group]');
-    if (!group) {
-      group = document.createElement('div');
-      group.className = 'right-button-group';
-      group.dataset.nsitPostFilterIconGroup = '';
-      const anchor = head.querySelector('.color-theme-switcher, .search-box');
-      if (anchor?.parentElement === head) head.insertBefore(group, anchor);
-      else head.append(group);
+    if (head && !head.querySelector('[data-nsit-post-filter-trigger]')) {
+      let group = head.querySelector('[data-nsit-post-filter-icon-group]');
+      if (!group) {
+        group = document.createElement('div');
+        group.className = 'right-button-group';
+        group.dataset.nsitPostFilterIconGroup = '';
+        const anchor = head.querySelector('.color-theme-switcher, .search-box');
+        if (anchor?.parentElement === head) head.insertBefore(group, anchor);
+        else head.append(group);
+      }
+      const trigger = document.createElement('button');
+      trigger.type = 'button'; trigger.className = 'nsit-post-filter-trigger'; trigger.dataset.nsitPostFilterTrigger = '';
+      trigger.title = '关键字过滤管理'; trigger.setAttribute('aria-label', trigger.title);
+      trigger.innerHTML = icon;
+      trigger.addEventListener('click', openPostFilterPanel);
+      group.append(trigger);
     }
-    const trigger = document.createElement('button');
-    trigger.type = 'button'; trigger.className = 'nsit-post-filter-trigger'; trigger.dataset.nsitPostFilterTrigger = '';
-    trigger.title = '关键字过滤管理'; trigger.setAttribute('aria-label', trigger.title);
-    trigger.innerHTML = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
-    trigger.addEventListener('click', openPostFilterPanel);
-    group.append(trigger);
+    const settings = document.querySelector('#nsk-right-panel-container .menu a[href="/setting"],.nsk-right-panel-container .menu a[href="/setting"]');
+    const row = settings?.parentElement;
+    if (row && !row.querySelector('[data-nsit-post-filter-trigger]')) {
+      // Keep the site's scoped attributes and native icon class so this entry
+      // follows the same size, spacing, theme and hover styles as its neighbours.
+      const trigger = settings.cloneNode(false);
+      trigger.removeAttribute('id'); trigger.href = '#';
+      trigger.classList.add('nsit-post-filter-account-trigger'); trigger.dataset.nsitPostFilterTrigger = '';
+      trigger.title = '屏蔽关键词设置'; trigger.setAttribute('aria-label', trigger.title); trigger.setAttribute('role', 'button');
+      const nativeIcon = settings.querySelector('svg');
+      if (nativeIcon) {
+        const svg = nativeIcon.cloneNode(false);
+        svg.setAttribute('viewBox', '0 0 48 48'); svg.setAttribute('fill', 'none'); svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = iconPath;
+        trigger.append(svg);
+      } else trigger.innerHTML = icon;
+      trigger.addEventListener('click', event => { event.preventDefault(); openPostFilterPanel('block'); });
+      trigger.addEventListener('keydown', event => { if (event.key === ' ') { event.preventDefault(); trigger.click(); } });
+      settings.after(document.createTextNode(' '), trigger);
+    }
   }
 
   function installPostFilters() {

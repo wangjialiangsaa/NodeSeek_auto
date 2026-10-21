@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.56
+// @version      1.4.57
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.56';
+  const VERSION = '1.4.57';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -44,7 +44,7 @@ const APP_ID = 'nsit-app';
     ['luckyNotify', '抽奖与中奖通知', '个人统计里的「抽奖 / 中奖」入口，以及帖子的开奖公告按钮'],
     ['tradeStatus', '交易状态', '帖子页 #0 楼旁的「已出 / 已收」按钮'],
     ['repliedPosts', '我的回复', '帖子页和列表页的回复楼层标记'],
-    ['postFilter', '关键字过滤', '列表页的关键字过滤入口'],
+    ['postFilter', '关键字过滤', '顶部和个人栏的关键词屏蔽 / 高亮设置入口'],
     ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
   ];
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));
@@ -3867,35 +3867,58 @@ function formValues(app) {
     return panel;
   }
 
-  function openPostFilterPanel() {
+  function openPostFilterPanel(tab) {
     const panel = ensurePostFilterPanel();
+    if (tab === 'block' || tab === 'highlight') panel._nsitPostFilterState = { tab, query: '', editingId: '' };
     panel.classList.add('is-open');
     renderPostFilterPanel();
   }
 
   function ensurePostFilterTrigger() {
     if (!featureEnabled('postFilter')) {
-      document.querySelector('[data-nsit-post-filter-trigger]')?.remove();
-      document.querySelector('[data-nsit-post-filter-panel]')?.remove();
+      document.querySelectorAll('[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
       return;
     }
+    const iconPath = '<path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>';
+    const icon = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">${iconPath}</svg>`;
     const head = document.querySelector('#nsk-head');
-    if (!head || head.querySelector('[data-nsit-post-filter-trigger]')) return;
-    let group = head.querySelector('[data-nsit-post-filter-icon-group]');
-    if (!group) {
-      group = document.createElement('div');
-      group.className = 'right-button-group';
-      group.dataset.nsitPostFilterIconGroup = '';
-      const anchor = head.querySelector('.color-theme-switcher, .search-box');
-      if (anchor?.parentElement === head) head.insertBefore(group, anchor);
-      else head.append(group);
+    if (head && !head.querySelector('[data-nsit-post-filter-trigger]')) {
+      let group = head.querySelector('[data-nsit-post-filter-icon-group]');
+      if (!group) {
+        group = document.createElement('div');
+        group.className = 'right-button-group';
+        group.dataset.nsitPostFilterIconGroup = '';
+        const anchor = head.querySelector('.color-theme-switcher, .search-box');
+        if (anchor?.parentElement === head) head.insertBefore(group, anchor);
+        else head.append(group);
+      }
+      const trigger = document.createElement('button');
+      trigger.type = 'button'; trigger.className = 'nsit-post-filter-trigger'; trigger.dataset.nsitPostFilterTrigger = '';
+      trigger.title = '关键字过滤管理'; trigger.setAttribute('aria-label', trigger.title);
+      trigger.innerHTML = icon;
+      trigger.addEventListener('click', openPostFilterPanel);
+      group.append(trigger);
     }
-    const trigger = document.createElement('button');
-    trigger.type = 'button'; trigger.className = 'nsit-post-filter-trigger'; trigger.dataset.nsitPostFilterTrigger = '';
-    trigger.title = '关键字过滤管理'; trigger.setAttribute('aria-label', trigger.title);
-    trigger.innerHTML = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
-    trigger.addEventListener('click', openPostFilterPanel);
-    group.append(trigger);
+    const settings = document.querySelector('#nsk-right-panel-container .menu a[href="/setting"],.nsk-right-panel-container .menu a[href="/setting"]');
+    const row = settings?.parentElement;
+    if (row && !row.querySelector('[data-nsit-post-filter-trigger]')) {
+      // Keep the site's scoped attributes and native icon class so this entry
+      // follows the same size, spacing, theme and hover styles as its neighbours.
+      const trigger = settings.cloneNode(false);
+      trigger.removeAttribute('id'); trigger.href = '#';
+      trigger.classList.add('nsit-post-filter-account-trigger'); trigger.dataset.nsitPostFilterTrigger = '';
+      trigger.title = '屏蔽关键词设置'; trigger.setAttribute('aria-label', trigger.title); trigger.setAttribute('role', 'button');
+      const nativeIcon = settings.querySelector('svg');
+      if (nativeIcon) {
+        const svg = nativeIcon.cloneNode(false);
+        svg.setAttribute('viewBox', '0 0 48 48'); svg.setAttribute('fill', 'none'); svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = iconPath;
+        trigger.append(svg);
+      } else trigger.innerHTML = icon;
+      trigger.addEventListener('click', event => { event.preventDefault(); openPostFilterPanel('block'); });
+      trigger.addEventListener('keydown', event => { if (event.key === ' ') { event.preventDefault(); trigger.click(); } });
+      settings.after(document.createTextNode(' '), trigger);
+    }
   }
 
   function installPostFilters() {

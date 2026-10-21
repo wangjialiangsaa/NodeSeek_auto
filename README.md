@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.56**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.57**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -15,6 +15,8 @@
 ## 界面
 
 界面跟随 NodeSeek 的浅色 / 深色主题自动切换，无需额外设置。
+
+个人栏头像下方、齿轮设置旁新增同款漏斗小图标，点击“屏蔽关键词设置”直接管理屏蔽条件；也可切换到高亮条件。它与顶部过滤入口共用规则，支持关键词、用户昵称以及折叠、隐藏和高亮处理。
 
 编辑栏只显示一个 **“🐔 工具”** 按钮，点击展开出鸡模板、粉色上传图片、计算器、收鸡模板和自动任务设置。展开后保留原按钮的图标和颜色，点击空白处或按 Esc 收起。**“出🐔模板”**用于发布出售帖，**“收🐔模板”**用于发布收购帖，两者互不影响。
 
