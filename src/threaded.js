@@ -330,8 +330,9 @@ function installThreadedReading() {
   }
 
   // A plain @mention or a link inside a quotation is not a parent relationship.
-  function relation(body, floor, topic) {
+  function relation(body, floor, s) {
     if (!body) return null;
+    const topic = s.topic;
     const first = [...body.childNodes].find(n => n.nodeType === 1 || n.textContent.trim());
     const links = [...body.querySelectorAll('a[href]')], candidates = [];
     const nonText = 'br,hr,img,picture,svg,video,audio,iframe,object,embed,input,button';
@@ -362,12 +363,17 @@ function installThreadedReading() {
       range.setEndBefore(link);
       const before = range.toString().trim();
       const leading = block === first && (!before || (mention && before === mention.textContent.trim())) && !range.cloneContents().querySelector(nonText);
+      // NodeSeek can leave an appended @recipient as plain text. Only accept
+      // that text when it is adjacent to the floor link and matches its author.
+      const parentAuthor = (parent === 0 ? s.op : s.posts.get(parent))?.author;
+      const previousNode = link.previousSibling;
+      const plainMention = !mention && parentAuthor && previousNode?.nodeType === 3 && previousNode.textContent.trimEnd().endsWith(`@${parentAuthor}`);
       // Native replies can append the adjacent @recipient / #floor pair after prose.
       // A standalone floor link still qualifies only at the start of the body.
-      if (!leading && !mention) continue;
+      if (!leading && !mention && !plainMention) continue;
       const prefix = leading ? [...(mention ? [mention] : []), link] : [];
       if (leading && link.nextSibling?.nodeName === 'BR') prefix.push(link.nextSibling);
-      const ref = { parent, href:`/post-${topic}-${Number(target[2])}#${parent}`, author:mention?.textContent.trim().replace(/^@/, '') || '', prefix };
+      const ref = { parent, href:`/post-${topic}-${Number(target[2])}#${parent}`, author:mention?.textContent.trim().replace(/^@/, '') || (plainMention ? parentAuthor : ''), prefix };
       if (leading) return ref;
       candidates.push(ref);
     }
@@ -618,7 +624,7 @@ function installThreadedReading() {
         clearCard(card);
         const floor = Number(card.id);
         const body = card.querySelector('article.post-content');
-        const post = { floor, card, body, author:card.querySelector('.author-name')?.textContent.trim() || '', ref:relation(body,floor,s.topic), depth:0, root:floor };
+        const post = { floor, card, body, author:card.querySelector('.author-name')?.textContent.trim() || '', ref:null, depth:0, root:floor };
         s.posts.set(floor, post);
         if (s.visited && !s.known.has(floor)) s.pending.add(floor);
         s.known.add(floor); card.classList.toggle('nst-new', s.pending.has(floor));
@@ -627,6 +633,7 @@ function installThreadedReading() {
       const sorted = [...s.posts.values()].sort((a,b) => a.floor - b.floor);
       const children = new Map();
       for (const post of sorted) {
+        post.ref = relation(post.body,post.floor,s);
         const parent = post.ref && s.posts.get(post.ref.parent);
         if (parent) { post.depth = parent.depth + 1; post.root = parent.root; }
         const key = parent ? parent.floor : 0;

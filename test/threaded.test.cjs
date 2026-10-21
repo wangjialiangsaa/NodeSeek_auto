@@ -95,6 +95,47 @@ test('recognizes a native reply pair in a later paragraph with inline formatting
   assert.equal(child.querySelector('strong').closest('.nst-reply-prefix'),null);
 });
 
+test('groups the real NodeSeek conversation with unlinked recipient text', async t => {
+  const { d } = await setup(t,
+    reply(14, '<p><a href="/member?t=wandu">@wandu</a> <a href="/post-997159-1#6">#6</a> 大哥要出了记得联系我</p>', 'magnorns') +
+    reply(15, '<p>1750出给你了，改油@magnorns <a href="/post-997159-2#14">#14</a></p>\n', 'wandu') +
+    reply(16, '<p><a href="/member?t=wandu">@wandu</a> <a href="/post-997159-2#15">#15</a> 好，没问题</p>', 'magnorns') +
+    reply(17, '<p>怎么交易，中介的话我不出中介费，而且找个靠谱的中介@magnorns <a href="/post-997159-2#16">#16</a></p>\n', 'wandu') +
+    reply(18, '<p><a href="/member?t=wandu">@wandu</a> <a href="/post-997159-2#15">#15</a> 稍等我一会儿</p>', 'magnorns'),
+    { url: 'https://www.nodeseek.com/post-997159-2' });
+  for (const [floor, depth] of [['14','0'],['15','1'],['16','2'],['17','3'],['18','2']]) {
+    assert.equal(d.getElementById(floor).dataset.nstDepth, depth, `floor ${floor}`);
+  }
+  const last = d.getElementById('17'), body = last.querySelector('.post-content');
+  assert.equal(last.querySelector('.nst-relation a').getAttribute('href'), '/post-997159-2#16');
+  assert.match(last.querySelector('.nst-relation').textContent, /magnorns/);
+  assert.equal(body.textContent.trim(), '怎么交易，中介的话我不出中介费，而且找个靠谱的中介@magnorns #16');
+  assert.equal(body.querySelector('.nst-reply-prefix'), null);
+  mode(d, 'quote');
+  assert.match(last.querySelector('.nst-auto-quote').textContent, /好，没问题/);
+  mode(d, 'raw');
+  assert.equal(last.querySelector('.nst-relation'), null);
+  assert.equal(body.textContent.trim(), '怎么交易，中介的话我不出中介费，而且找个靠谱的中介@magnorns #16');
+});
+
+test('unlinked recipients require the target author and exclude unsafe or ambiguous references', async t => {
+  const { d } = await setup(t,
+    reply(1, 'one', 'magnorns') + reply(2, 'two', 'wandu') +
+    reply(3, '<p>正文@someone <a href="/post-123-1#1">#1</a></p>') +
+    reply(4, '<p>正文@magnorns <a href="/post-999-1#1">#1</a></p>') +
+    reply(5, '<blockquote><p>正文@magnorns <a href="/post-123-1#1">#1</a></p></blockquote>') +
+    reply(6, '<pre><code>正文@magnorns <a href="/post-123-1#1">#1</a></code></pre>') +
+    reply(7, '<p>正文@magnorns<br> <a href="/post-123-1#1">#1</a></p>') +
+    reply(8, '<p>正文<a href="https://example.com/member?t=magnorns">@magnorns</a> <a href="/post-123-1#1">#1</a></p>') +
+    reply(9, '<p>正文@magnorns2 <a href="/post-123-1#1">#1</a></p>') +
+    reply(10, '<p>同时回复@magnorns <a href="/post-123-1#1">#1</a> 和@wandu <a href="/post-123-1#2">#2</a></p>') +
+    reply(11, '<p>正文@magnorns</p>') +
+    reply(12, '<p>参见 <a href="/post-123-1#1">#1</a></p>'));
+  for (const floor of ['3','4','5','6','7','8','9','10','11','12']) {
+    assert.equal(d.getElementById(floor).dataset.nstDepth, '0', `floor ${floor}`);
+  }
+});
+
 test('wrapped leading reply headers never hide the message contained in the same wrapper',async t=>{
   const {d}=await setup(t,reply(1,'parent')+reply(2,`<p><span>${ref(1)}<strong>必须保留的正文</strong></span></p>`));
   const child=d.getElementById('2');assert.equal(child.dataset.nstDepth,'1');

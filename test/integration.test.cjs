@@ -58,6 +58,12 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     await pause(160);
     assert.equal(d.getElementById('2').dataset.nstDepth,'1');
     assert.equal(d.getElementById('2').querySelector('strong').closest('.nst-reply-prefix'),null);
+    d.getElementById('2').querySelector('.post-content').innerHTML='<p><strong>真实页面正文</strong>，句末回复@User1 <a href="/post-123-1#1">#1</a></p>';
+    await pause(160);
+    assert.equal(d.getElementById('2').dataset.nstDepth,'1');
+    assert.equal(d.getElementById('2').querySelector('.nst-relation a').getAttribute('href'),'/post-123-1#1');
+    assert.equal(d.getElementById('2').querySelector('.post-content').textContent,'真实页面正文，句末回复@User1 #1');
+    assert.equal(d.getElementById('2').querySelector('strong').closest('.nst-reply-prefix'),null);
     assert.equal(d.getElementById('editor'),editor);
     assert.ok(editor.classList.contains('nst-fixed-editor'));
     assert.equal(cm.getValue(),'existing draft');
