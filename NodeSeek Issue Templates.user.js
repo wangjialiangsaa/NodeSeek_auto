@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek Issue Templates
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.51
+// @version      1.4.52
 // @description  NodeSeek 交易帖模板、抽奖与回复追踪，支持楼中楼阅读、下滑自动翻页和底部固定回复栏。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.51';
+  const VERSION = '1.4.52';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -820,10 +820,15 @@ function escapeHtml(value) {
     injectStyles(`#${APP_ID} .nsit-calc-dialog:not([data-nsit-convert="open"]) .nsit-calc-foot{grid-template-columns:1fr}#${APP_ID} .nsit-calc-dialog:not([data-nsit-convert="open"]) .nsit-calc-foot-cell:has([data-action="fill-calc-convert"]){display:none}`);
     // 汇率计算默认收起来、弹窗改成靠右停靠，展开时才恢复两栏宽度（压过上面居中和 1180px 那套）。
     injectStyles(`#${APP_ID} .nsit-calc-insert{white-space:pre-wrap}#${APP_ID} .nsit-calc-value-card .nsit-rate-value{order:0;width:auto;margin-right:auto}#${APP_ID} .nsit-calc-value-card .nsit-value small{font-size:20px}#${APP_ID} .nsit-calc-value-card .nsit-value-result{margin-top:6px;padding-bottom:10px}#${APP_ID} .nsit-calc-modal input:disabled{background:var(--nsit-sunken);color:var(--nsit-faint);cursor:not-allowed}#${APP_ID} .nsit-calc-payback-fields{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);padding-top:10px;border-top:1px solid var(--nsit-line)}#${APP_ID} .nsit-calc-payback-result{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;margin-top:8px}#${APP_ID} .nsit-calc-payback-result b{flex:none;color:var(--nsit-accent);font-size:18px;font-weight:750;line-height:1.2}#${APP_ID} .nsit-calc-payback-result[data-state="done"] b{color:var(--nsit-ok)}#${APP_ID} .nsit-calc-payback-result small{min-width:0;color:var(--nsit-muted);font-size:12px}#${APP_ID} .nsit-calc-foot-cell{gap:10px}#${APP_ID} .nsit-calc-foot-cell .nsit-card-toggle{font-size:13px}#${APP_ID} .nsit-calc-dialog{position:relative}#${APP_ID}.nsit-calc-generating .nsit-calc-loading{display:grid}#${APP_ID}.nsit-calc-open .nsit-calc-modal{place-items:center end}#${APP_ID} .nsit-calc-dialog{width:min(620px,100%)}#${APP_ID} .nsit-calc-body{grid-template-columns:1fr}#${APP_ID} .nsit-calc-panel+.nsit-calc-panel{border-top:1px solid var(--nsit-line);border-left:0}#${APP_ID} .nsit-calc-convert-body{display:grid;gap:12px;min-width:0}#${APP_ID} .nsit-calc-panel-head .nsit-calc-convert-toggle{display:inline-flex;align-items:center;gap:7px;color:var(--nsit-ink);font-size:15px;font-weight:600}#${APP_ID} .nsit-calc-panel-head .nsit-calc-convert-entry{gap:6px;padding:3px 8px;border:1px solid var(--nsit-info-line-3);border-radius:6px;background:var(--nsit-info-soft);color:var(--nsit-info-ink);font-size:13px;line-height:1.5}#${APP_ID} .nsit-calc-panel-head .nsit-calc-convert-entry:hover{border-color:var(--nsit-info-ink);background:var(--nsit-info);color:var(--nsit-on-info)}#${APP_ID} .nsit-calc-chevron{display:block;width:7px;height:7px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:rotate(-45deg);transition:transform .15s ease}#${APP_ID} .nsit-calc-dialog[data-nsit-convert="open"] .nsit-calc-chevron{transform:rotate(135deg)}#${APP_ID} .nsit-calc-dialog[data-nsit-convert="open"] .nsit-calc-convert-entry{display:none}#${APP_ID} .nsit-calc-dialog:not([data-nsit-convert="open"]) .nsit-calc-panel[data-nsit-calc-panel="convert"]{display:none}@media(min-width:1081px){#${APP_ID} .nsit-calc-dialog[data-nsit-convert="open"]{width:min(1180px,100%)}#${APP_ID} .nsit-calc-dialog[data-nsit-convert="open"] .nsit-calc-body{grid-template-columns:repeat(2,minmax(0,1fr))}#${APP_ID} .nsit-calc-dialog[data-nsit-convert="open"] .nsit-calc-panel+.nsit-calc-panel{border-top:0;border-left:1px solid var(--nsit-line)}}`);
+    injectStyles(`#${APP_ID}>.nsit-trigger:first-child,#${APP_ID}>.nsit-image-trigger{width:70px;height:24.25px;white-space:nowrap}#${APP_ID} .nsit-image-trigger{display:inline-block;flex:none;align-self:center;margin:0 7px 0 0;padding:3px 8px;border:1px solid #ec4899;border-radius:5px;background:color-mix(in srgb,#ec4899 12%,var(--nsit-surface));color:#db2777;font:600 13px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;vertical-align:baseline;cursor:pointer}#${APP_ID} .nsit-image-trigger:hover{background:#db2777;border-color:#db2777;color:#fff}#${APP_ID} [data-nsit-image-files]{display:none!important}#${APP_ID} [data-nsit-image-status]{font:12px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-muted);white-space:normal}#${APP_ID} [data-nsit-image-status][hidden]{display:none}#${APP_ID} [data-nsit-image-status] a{color:#db2777}#${APP_ID} [data-nsit-image-status] button{margin:0 4px;padding:1px 5px;border:1px solid #ec4899;border-radius:4px;background:var(--nsit-surface);color:#db2777;font:inherit;cursor:pointer}.message-input .mde-toolbar>#${APP_ID} .nsit-image-trigger{margin-right:4px}`);
+    injectStyles(`body.dark-layout #${APP_ID} .nsit-image-trigger,body.dark-layout #${APP_ID} [data-nsit-image-status] a,body.dark-layout #${APP_ID} [data-nsit-image-status] button{color:#f9a8d4}body.dark-layout #${APP_ID} .nsit-image-trigger:hover{color:#fff}`);
     app.innerHTML = `
       <button type="button" class="nsit-trigger" aria-haspopup="dialog">出🐔模板</button>
+      <button type="button" class="nsit-image-trigger" title="选择图片上传到 NodeImage，也可在发言栏粘贴图片">上传图片</button>
+      <input type="file" data-nsit-image-files accept="image/*" multiple hidden>
       ${replyMode ? '<button type="button" class="nsit-trigger nsit-calc-trigger" aria-haspopup="dialog">剩余价值计算</button>' : ''}
       ${buyTemplateMarkup()}
+      <span data-nsit-image-status role="status" aria-live="polite" hidden></span>
       <div class="nsit-modal" aria-hidden="true">
       <div class="nsit-dialog-wrap">
         ${machineTabsMarkup()}
@@ -1087,7 +1092,7 @@ function formValues(app) {
     if (existing) return existing;
     const host = createApp({ replyMode: true });
     host.dataset.nsitFlagHost = '';
-    host.querySelectorAll('.nsit-trigger, .nsit-buy-trigger, .nsit-calc-trigger').forEach((button) => { button.style.display = 'none'; });
+    host.querySelectorAll('.nsit-trigger, .nsit-buy-trigger, .nsit-calc-trigger, .nsit-image-trigger, [data-nsit-image-status]').forEach((button) => { button.style.display = 'none'; });
     document.body.append(host);
     wireFeatureFlagDialog(host);
     return host;
@@ -2566,40 +2571,57 @@ function formValues(app) {
   function nodeImageRequest(options) {
     if (typeof GM_xmlhttpRequest !== 'function') throw new Error('请在 Tampermonkey 中运行脚本以上传图片');
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({ ...options, withCredentials: true, responseType: 'json', onload: (response) => response.status === 200 ? resolve(response.response) : reject(Object.assign(new Error(`上传失败（HTTP ${response.status}）`), { status: response.status })), onerror: () => reject(new Error('图片上传网络错误')) });
+      GM_xmlhttpRequest({
+        ...options, withCredentials: true, responseType: 'json', timeout: 120000,
+        onload: (response) => response.status >= 200 && response.status < 300
+          ? resolve(response.response)
+          : reject(Object.assign(new Error([401, 403].includes(response.status) ? '请先登录 NodeImage 后重试' : `上传失败（HTTP ${response.status}）`), { status: response.status })),
+        onerror: () => reject(new Error('图片上传网络错误，请重试')),
+        ontimeout: () => reject(new Error('图片上传超时，请重试')),
+        onabort: () => reject(new Error('图片上传已取消')),
+      });
     });
   }
 
+  let nodeImageKeyRequest = null;
   async function getNodeImageApiKey(force = false) {
     const cached = !force && typeof GM_getValue === 'function' ? GM_getValue(NODEIMAGE_KEY, '') : '';
     if (cached) return cached;
-    const response = await nodeImageRequest({ method: 'GET', url: 'https://api.nodeimage.com/api/user/api-key', headers: { Accept: 'application/json' } });
-    if (!response?.api_key) throw new Error('请先登录 NodeImage 后重试');
-    GM_setValue(NODEIMAGE_KEY, response.api_key);
-    return response.api_key;
+    if (!nodeImageKeyRequest) nodeImageKeyRequest = (async () => {
+      const response = await nodeImageRequest({ method: 'GET', url: 'https://api.nodeimage.com/api/user/api-key', headers: { Accept: 'application/json' } });
+      if (!response?.api_key) throw new Error('请先登录 NodeImage 后重试');
+      if (typeof GM_setValue === 'function') GM_setValue(NODEIMAGE_KEY, response.api_key);
+      return response.api_key;
+    })().finally(() => { nodeImageKeyRequest = null; });
+    return nodeImageKeyRequest;
+  }
+
+  async function uploadNodeImage(file) {
+    if (!file?.type?.startsWith('image/')) throw new Error('请选择图片文件');
+    if (file.size > 100 * 1024 * 1024) throw new Error('图片不能超过 100 MB');
+    const upload = async (forceKey = false) => {
+      const data = new FormData();
+      data.append('image', file);
+      const apiKey = await getNodeImageApiKey(forceKey);
+      const response = await nodeImageRequest({ method: 'POST', url: 'https://api.nodeimage.com/api/upload', headers: { Accept: 'application/json', 'X-API-Key': apiKey }, data });
+      if (!response?.success || !response?.links?.markdown) {
+        const unauthorized = /unauthorized|invalid api key|未授权|无效/i.test(String(response?.error || ''));
+        throw Object.assign(new Error(unauthorized ? '请先登录 NodeImage 后重试' : response?.error || 'NodeImage 未返回图片链接'), { status: unauthorized ? 401 : 0 });
+      }
+      return response.links.markdown;
+    };
+    try {
+      return await upload();
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
+      return upload(true);
+    }
   }
 
   async function uploadValueCard(values, app, rate, payback = null) {
     const blob = await createValueCard(values, app, rate, payback);
-    const upload = async (forceKey = false) => {
-      const data = new FormData();
-      data.append('image', new File([blob], 'nodeseek-value-card.png', { type: 'image/png' }));
-      const apiKey = await getNodeImageApiKey(forceKey);
-      return nodeImageRequest({ method: 'POST', url: 'https://api.nodeimage.com/api/upload', headers: { Accept: 'application/json', 'X-API-Key': apiKey }, data });
-    };
-    let response;
-    try {
-      response = await upload();
-    } catch (error) {
-      if (error.status !== 401) throw error;
-      typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
-      response = await upload(true);
-    }
-    if (!response?.success || !response?.links?.markdown) {
-      if (String(response?.error || '').toLowerCase().match(/unauthorized|invalid api key|未授权|无效/)) typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
-      throw new Error(response?.error || 'NodeImage 未返回图片链接');
-    }
-    return response.links.markdown;
+    return uploadNodeImage(new File([blob], 'nodeseek-value-card.png', { type: 'image/png' }));
   }
 
   // 预出价格相对剩余价值的结论：溢价多少、打几折、还是正好按剩余价值出。
@@ -6248,6 +6270,136 @@ function formValues(app) {
     });
   }
 
+let imageUploadSequence = 0;
+
+  function installImageUploads(app) {
+    if (app._nsitImageUploads) return;
+    const scope = app._nsitEditor;
+    const button = app.querySelector('.nsit-image-trigger');
+    const picker = app.querySelector('[data-nsit-image-files]');
+    const status = app.querySelector('[data-nsit-image-status]');
+    if (!scope || !button || !picker || !status) return;
+    app._nsitImageUploads = true;
+    const controller = new AbortController();
+    const listenerOptions = { capture: true, signal: controller.signal };
+    const failed = [];
+    const originals = new Map();
+    let pending = 0, completed = 0;
+
+    function editor() {
+      const wrapper = scope.matches('.CodeMirror') ? scope : scope.querySelector('.CodeMirror');
+      const cm = wrapper?.CodeMirror;
+      if (cm && typeof cm.replaceRange === 'function') return { cm, get: () => cm.getValue() };
+      const textarea = scope.matches('textarea') ? scope : Array.from(scope.querySelectorAll('textarea')).find(element => !app.contains(element));
+      return textarea ? { textarea, get: () => textarea.value } : null;
+    }
+
+    function replace(target, from, to, text, selectInserted = false) {
+      if (target.cm) {
+        const cm = target.cm;
+        // replaceRange keeps CodeMirror's undo history and adjusts the current cursor.
+        cm.replaceRange(text, cm.posFromIndex(from), cm.posFromIndex(to), 'nsit-image-upload');
+        if (selectInserted) cm.setSelection(cm.posFromIndex(from + text.length));
+      } else {
+        const input = target.textarea;
+        input.setRangeText(text, from, to, selectInserted ? 'end' : 'preserve');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    function renderStatus(message = '') {
+      status.hidden = false;
+      status.replaceChildren(document.createTextNode(pending ? `正在上传 ${pending} 张图片…` : message || (completed ? `已上传 ${completed} 张图片` : '')));
+      if (!failed.length) return;
+      status.append(document.createTextNode(` ${failed[0].error.message} `));
+      if (/登录|授权/.test(failed[0].error.message)) {
+        const login = document.createElement('a');
+        login.href = 'https://www.nodeimage.com/'; login.target = '_blank'; login.rel = 'noopener noreferrer';
+        login.textContent = '登录 NodeImage'; status.append(login, document.createTextNode(' '));
+      }
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.textContent = `重试${failed.length > 1 ? `（${failed.length} 张）` : ''}`;
+      retry.title = '在当前光标处重新插入图片，保留选中的文字';
+      retry.addEventListener('click', () => {
+        const files = failed.splice(0).map(job => job.file);
+        start(files, true);
+      });
+      status.append(retry);
+    }
+
+    function settle(job, text) {
+      if (!app.isConnected || !scope.isConnected) return;
+      const content = job.target.get();
+      const at = content.indexOf(job.token);
+      // If the author deleted/replaced the pending image, never resurrect it.
+      if (at >= 0) replace(job.target, at, at + job.token.length, text);
+    }
+
+    function start(files, keepSelection = false) {
+      const target = editor();
+      if (!target || !scope.isConnected) return;
+      files = Array.from(files).filter(file => file?.type?.startsWith('image/'));
+      if (!files.length) return;
+      const content = target.get();
+      const to = target.cm ? target.cm.indexFromPos(target.cm.getCursor('to')) : target.textarea.selectionEnd;
+      const from = keepSelection ? to : target.cm ? target.cm.indexFromPos(target.cm.getCursor('from')) : target.textarea.selectionStart;
+      const jobs = files.map((file, index) => ({
+        file, target, original: index === 0 ? content.slice(from, to) : '', prefix: index ? '\n' : '',
+        token: `![图片上传中…](nsit-upload://${Date.now()}-${++imageUploadSequence})`,
+      }));
+      jobs.forEach(job => originals.set(job.token, job.original));
+      replace(target, from, to, jobs.map(job => job.token).join(''), true);
+      pending += jobs.length;
+      renderStatus();
+      for (const job of jobs) {
+        uploadNodeImage(job.file).then(markdown => {
+          settle(job, job.prefix + markdown); completed++;
+        }).catch(error => {
+          settle(job, job.original); failed.push({ file: job.file, error });
+        }).finally(() => { pending--; if (app.isConnected) renderStatus(); });
+      }
+    }
+
+    button.addEventListener('click', () => { picker.value = ''; picker.click(); });
+    picker.addEventListener('change', () => { start(picker.files); picker.value = ''; });
+    scope.addEventListener('paste', event => {
+      if (app.contains(event.target)) return;
+      const target = editor();
+      if (!target || !(target.cm ? event.target.closest?.('.CodeMirror') : event.target === target.textarea)) return;
+      const data = event.clipboardData;
+      let files = Array.from(data?.items || []).filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
+      if (!files.length) files = Array.from(data?.files || []).filter(file => file.type.startsWith('image/'));
+      if (!files.length) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      start(files);
+    }, listenerOptions);
+
+    // Keep temporary upload markers out of published posts, including Ctrl+Enter.
+    const postingArea = scope.closest('form, .md-editor, .message-input') || scope.parentElement;
+    function blockPendingPost(event) {
+      const isPost = event.type === 'submit' || (event.type === 'keydown' && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) ||
+        (event.type === 'click' && event.target.closest?.('button[type="submit"], input[type="submit"], .submit, .submit-button, .send-button, [data-action="submit"]'));
+      if (app.contains(event.target) || !isPost) return;
+      if (pending) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        renderStatus('请等待图片上传完成后再发布');
+        return;
+      }
+      // Undo or a restored draft can bring an old marker back after its request ended.
+      const target = editor();
+      if (!target) return;
+      const markers = Array.from(target.get().matchAll(/!\[图片上传中…\]\(nsit-upload:\/\/[\d-]+\)/g));
+      for (const marker of markers.reverse()) replace(target, marker.index, marker.index + marker[0].length, originals.get(marker[0]) || '');
+    }
+    for (const type of ['submit', 'click', 'keydown']) postingArea?.addEventListener(type, blockPendingPost, listenerOptions);
+    const observer = new MutationObserver(() => {
+      if (app.isConnected && scope.isConnected) return;
+      controller.abort(); observer.disconnect();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
 function installThreadedReading() {
   'use strict';
   if (document.getElementById('nst-style')) return { refresh() {} };
@@ -7007,6 +7159,7 @@ function replyEditor() {
       else if (isReply) (editor.closest('form, [class*="reply-editor"], [class*="comment-editor"]') || editor).before(app);
       else title.before(app);
     }
+    installImageUploads(app);
     restoreDraft(app);
     restoreCardToggle(app);
     restoreBuyDraft(app);

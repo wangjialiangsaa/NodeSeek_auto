@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.51**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.52**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -43,6 +43,13 @@
 面向收机场景的轻量表单，填目标机器和收购条件即可生成收购帖。
 
 ## 功能
+
+### 图片上传
+
+- “出🐔模板”右侧新增同尺寸的粉色 **“上传图片”** 按钮，支持一次选择多张图片。
+- 在原生发帖、回复或私信编辑栏中按 **Ctrl+V** 粘贴截图 / 图片，即自动上传到官方 [NodeImage](https://www.nodeimage.com/) 并在光标处插入 Markdown；普通文字粘贴保持原样。
+- 首次使用如提示未登录，点击“登录 NodeImage”完成 NodeSeek 授权，再回到原页点“重试”，无需手填 API Key。
+- 上传中可继续编辑草稿；失败可重试，选中的原文会恢复。单张图片最大 100 MB，图片上传完成后再发布。
 
 ### 出🐔模板
 

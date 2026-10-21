@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek Issue Templates
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.51
+// @version      1.4.52
 // @description  NodeSeek 交易帖模板、抽奖与回复追踪，支持楼中楼阅读、下滑自动翻页和底部固定回复栏。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template

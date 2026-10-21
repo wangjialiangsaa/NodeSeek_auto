@@ -61,6 +61,7 @@
       else if (isReply) (editor.closest('form, [class*="reply-editor"], [class*="comment-editor"]') || editor).before(app);
       else title.before(app);
     }
+    installImageUploads(app);
     restoreDraft(app);
     restoreCardToggle(app);
     restoreBuyDraft(app);

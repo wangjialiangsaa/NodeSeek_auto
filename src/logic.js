@@ -77,7 +77,7 @@
     if (existing) return existing;
     const host = createApp({ replyMode: true });
     host.dataset.nsitFlagHost = '';
-    host.querySelectorAll('.nsit-trigger, .nsit-buy-trigger, .nsit-calc-trigger').forEach((button) => { button.style.display = 'none'; });
+    host.querySelectorAll('.nsit-trigger, .nsit-buy-trigger, .nsit-calc-trigger, .nsit-image-trigger, [data-nsit-image-status]').forEach((button) => { button.style.display = 'none'; });
     document.body.append(host);
     wireFeatureFlagDialog(host);
     return host;
@@ -1556,40 +1556,57 @@
   function nodeImageRequest(options) {
     if (typeof GM_xmlhttpRequest !== 'function') throw new Error('请在 Tampermonkey 中运行脚本以上传图片');
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({ ...options, withCredentials: true, responseType: 'json', onload: (response) => response.status === 200 ? resolve(response.response) : reject(Object.assign(new Error(`上传失败（HTTP ${response.status}）`), { status: response.status })), onerror: () => reject(new Error('图片上传网络错误')) });
+      GM_xmlhttpRequest({
+        ...options, withCredentials: true, responseType: 'json', timeout: 120000,
+        onload: (response) => response.status >= 200 && response.status < 300
+          ? resolve(response.response)
+          : reject(Object.assign(new Error([401, 403].includes(response.status) ? '请先登录 NodeImage 后重试' : `上传失败（HTTP ${response.status}）`), { status: response.status })),
+        onerror: () => reject(new Error('图片上传网络错误，请重试')),
+        ontimeout: () => reject(new Error('图片上传超时，请重试')),
+        onabort: () => reject(new Error('图片上传已取消')),
+      });
     });
   }
 
+  let nodeImageKeyRequest = null;
   async function getNodeImageApiKey(force = false) {
     const cached = !force && typeof GM_getValue === 'function' ? GM_getValue(NODEIMAGE_KEY, '') : '';
     if (cached) return cached;
-    const response = await nodeImageRequest({ method: 'GET', url: 'https://api.nodeimage.com/api/user/api-key', headers: { Accept: 'application/json' } });
-    if (!response?.api_key) throw new Error('请先登录 NodeImage 后重试');
-    GM_setValue(NODEIMAGE_KEY, response.api_key);
-    return response.api_key;
+    if (!nodeImageKeyRequest) nodeImageKeyRequest = (async () => {
+      const response = await nodeImageRequest({ method: 'GET', url: 'https://api.nodeimage.com/api/user/api-key', headers: { Accept: 'application/json' } });
+      if (!response?.api_key) throw new Error('请先登录 NodeImage 后重试');
+      if (typeof GM_setValue === 'function') GM_setValue(NODEIMAGE_KEY, response.api_key);
+      return response.api_key;
+    })().finally(() => { nodeImageKeyRequest = null; });
+    return nodeImageKeyRequest;
+  }
+
+  async function uploadNodeImage(file) {
+    if (!file?.type?.startsWith('image/')) throw new Error('请选择图片文件');
+    if (file.size > 100 * 1024 * 1024) throw new Error('图片不能超过 100 MB');
+    const upload = async (forceKey = false) => {
+      const data = new FormData();
+      data.append('image', file);
+      const apiKey = await getNodeImageApiKey(forceKey);
+      const response = await nodeImageRequest({ method: 'POST', url: 'https://api.nodeimage.com/api/upload', headers: { Accept: 'application/json', 'X-API-Key': apiKey }, data });
+      if (!response?.success || !response?.links?.markdown) {
+        const unauthorized = /unauthorized|invalid api key|未授权|无效/i.test(String(response?.error || ''));
+        throw Object.assign(new Error(unauthorized ? '请先登录 NodeImage 后重试' : response?.error || 'NodeImage 未返回图片链接'), { status: unauthorized ? 401 : 0 });
+      }
+      return response.links.markdown;
+    };
+    try {
+      return await upload();
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
+      return upload(true);
+    }
   }
 
   async function uploadValueCard(values, app, rate, payback = null) {
     const blob = await createValueCard(values, app, rate, payback);
-    const upload = async (forceKey = false) => {
-      const data = new FormData();
-      data.append('image', new File([blob], 'nodeseek-value-card.png', { type: 'image/png' }));
-      const apiKey = await getNodeImageApiKey(forceKey);
-      return nodeImageRequest({ method: 'POST', url: 'https://api.nodeimage.com/api/upload', headers: { Accept: 'application/json', 'X-API-Key': apiKey }, data });
-    };
-    let response;
-    try {
-      response = await upload();
-    } catch (error) {
-      if (error.status !== 401) throw error;
-      typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
-      response = await upload(true);
-    }
-    if (!response?.success || !response?.links?.markdown) {
-      if (String(response?.error || '').toLowerCase().match(/unauthorized|invalid api key|未授权|无效/)) typeof GM_setValue === 'function' && GM_setValue(NODEIMAGE_KEY, '');
-      throw new Error(response?.error || 'NodeImage 未返回图片链接');
-    }
-    return response.links.markdown;
+    return uploadNodeImage(new File([blob], 'nodeseek-value-card.png', { type: 'image/png' }));
   }
 
   // 预出价格相对剩余价值的结论：溢价多少、打几折、还是正好按剩余价值出。
