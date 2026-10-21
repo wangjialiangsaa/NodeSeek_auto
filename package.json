@@ -1,9 +1,14 @@
 {
   "private": true,
+  "scripts": {
+    "build": "node tools/build.js build",
+    "test": "node --test test/*.test.cjs worker/test/*.test.mjs"
+  },
   "volta": {
     "node": "24.18.0"
   },
   "devDependencies": {
+    "jsdom": "29.0.1",
     "terser": "5.49.0"
   }
 }

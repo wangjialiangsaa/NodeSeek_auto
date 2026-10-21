@@ -605,6 +605,7 @@
     applyEditorFeatureFlags(app);
   }
 
+  const threadedReading = installThreadedReading();
   injectBaseStyles();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();

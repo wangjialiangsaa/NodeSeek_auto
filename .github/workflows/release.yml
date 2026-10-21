@@ -21,6 +21,8 @@ jobs:
         run: npm ci
       - name: Build userscripts
         run: node tools/build.js build
+      - name: Test userscripts and catalog worker
+        run: npm test
       - name: Verify userscripts
         run: |
           node --check 'NodeSeek Issue Templates.user.js'

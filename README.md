@@ -4,9 +4,13 @@
 
 ## 安装
 
-在 Tampermonkey 中直接安装：[NodeSeek Issue Templates.min.user.js](https://github.com/ruoqianfengshao/nodeseek-issue-template/releases/latest/download/NodeSeek.Issue.Templates.min.user.js)。
+**[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-脚本在 NodeSeek 各页面提供对应功能：发帖与编辑页有“出🐔模板”“收🐔模板”和“🎁 抽奖配置”，帖子页有抽奖跟踪、交易状态与「我的回复」，列表页有关键字过滤。
+当前版本 **1.4.51**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+
+已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
+
+脚本在 NodeSeek 各页面提供对应功能：发帖与编辑页有“出🐔模板”“收🐔模板”和“🎁 抽奖配置”，帖子页有楼中楼、自动续页、固定回复栏、抽奖跟踪、交易状态与「我的回复」，列表页有关键字过滤。
 
 ## 界面
 
@@ -70,9 +74,16 @@
 
 ### 帖子辅助
 
+- **楼中楼阅读**：把同一讨论的父评论与子回复排列在一起，可切换“楼中楼 / 引用 / 原始”。
+- **下滑自动加载**：接近评论区底部自动接入下一页、去除重复置顶评论，直到末页；从中间页打开时继续加载之后的分页。
+- **固定回复栏**：原生回复框固定在底部，可展开 / 收起，保留草稿和原生发布按钮；评论的回复、引用可直接展开它。
 - **交易状态**：自己发布的交易帖在楼层旁提供「已出 / 不出了」（出售帖）或「已收 / 不收了」（收购帖）按钮，一点即可切换标题状态
 - **我的回复**：在帖子页列出自己在该帖回复过的楼层，可直接跳转；列表页则标记出回复过的帖子
 - **关键字过滤**：按关键字隐藏列表页里不想看的帖子
+
+楼中楼、自动续页和固定回复栏默认开启，可在油猴菜单的“功能开关 → 楼中楼阅读”即时关闭或恢复。“原始”只切换评论排列，续页和固定栏仍保留。未加载的父评论可以跳转或预览；导入评论不能复用原生菜单时，提供“引用 / 回复 / 原页操作”，后者可在原页进行点赞、加鸡腿等操作。加载失败后，等待几秒继续下滑即可重试。
+
+阅读进度针对当前已加载的评论。只有开头明确指向本帖较早 `#楼层` 的原生回复链接用于判断父子关系，普通 `@用户名` 不会被误排为子回复。更多说明见[楼中楼整合说明](docs/threaded-reading.md)。
 
 ## 抽奖
 
@@ -145,10 +156,12 @@
 
 ## 开发
 
-依赖：Node.js 20 或更高版本。
+推荐 Node.js 24；测试依赖要求 Node.js 20.19+、22.13+ 或 24+。
 
 ```sh
-node tools/build.js build
+npm ci
+npm run build
+npm test
 node --check 'NodeSeek Issue Templates.user.js'
 node --check 'NodeSeek Issue Templates.min.user.js'
 git diff --check
@@ -156,7 +169,7 @@ git diff --check
 
 源码位于 `src/`，本地厂商图标在 `assets/vendors/`。根目录的 `NodeSeek Issue Templates.user.js` 与 `NodeSeek Issue Templates.min.user.js` 分别是可读版和压缩版构建产物，不直接编辑；修改源码后执行构建命令。
 
-GitHub Actions 会在推送和 Pull Request 时重新构建，并验证构建产物没有未提交差异。推送 `v*` 标签会自动创建 GitHub Release 并附带两份脚本。
+GitHub Actions 会在推送和 Pull Request 时重新构建、运行 DOM 整合与配置库测试，并验证构建产物没有未提交差异。推送 `v*` 标签会自动创建 GitHub Release 并附带两份脚本。一键安装与自动更新直接使用本仓库 `main` 上的压缩版，不依赖 Release。
 
 ## 共享配置服务
 

@@ -3,12 +3,14 @@
 - `config.js`：常量、字段配置与选项。
 - `ui.js`：表单模板、通过 `GM_addStyle` 注入的样式与多机器书签界面。
 - `logic.js`：计算、汇率、图片上传、Markdown 与表单状态。
+- `threaded.js`：楼中楼、下滑自动加载、固定原生回复栏及切页清理；通过“功能开关”即时启停。
 - `main.js`：NodeSeek 编辑器集成、事件处理和启动。
 
 修改源码后执行：
 
 ```sh
 node tools/build.js build
+node --test test/*.test.cjs worker/test/*.test.mjs
 node --check 'NodeSeek Issue Templates.user.js'
 node --check 'NodeSeek Issue Templates.min.user.js'
 ```

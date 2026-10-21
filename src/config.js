@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.48';
+  const VERSION = '1.4.51';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -19,6 +19,7 @@
     ['tradeStatus', '交易状态', '帖子页 #0 楼旁的「已出 / 已收」按钮'],
     ['repliedPosts', '我的回复', '帖子页和列表页的回复楼层标记'],
     ['postFilter', '关键字过滤', '列表页的关键字过滤入口'],
+    ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
   ];
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));
   const REPLIED_POSTS_STORAGE_KEY = 'nsit-replied-posts-v1';
@@ -35,11 +36,11 @@
     ['custom', '自定义背景'],
   ];
   const VALUE_CARD_BACKGROUNDS = {
-    'stardew-spring': 'https://raw.githubusercontent.com/ruoqianfengshao/nodeseek-issue-template/main/assets/value-cards/stardew-spring.jpg',
-    'stardew-summer': 'https://raw.githubusercontent.com/ruoqianfengshao/nodeseek-issue-template/main/assets/value-cards/stardew-summer.jpg',
-    'stardew-autumn': 'https://raw.githubusercontent.com/ruoqianfengshao/nodeseek-issue-template/main/assets/value-cards/stardew-autumn.jpg',
-    'stardew-winter': 'https://raw.githubusercontent.com/ruoqianfengshao/nodeseek-issue-template/main/assets/value-cards/stardew-winter.jpg',
-    tank: 'https://raw.githubusercontent.com/ruoqianfengshao/nodeseek-issue-template/main/assets/value-cards/tank.png',
+    'stardew-spring': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-spring.jpg',
+    'stardew-summer': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-summer.jpg',
+    'stardew-autumn': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-autumn.jpg',
+    'stardew-winter': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-winter.jpg',
+    tank: 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/tank.png',
   };
   const RENEWAL_FIELD_OPTIONS = [
     ['renewal', '续费金额 / 周期'], ['expiryDate', '到期日期'], ['tradeDate', '交易日期'], ['remainingValue', '剩余价值'],

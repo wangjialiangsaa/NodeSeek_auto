@@ -1,0 +1,299 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { JSDOM } = require('jsdom');
+const file = path.join(__dirname, '../src/threaded.js');
+const source = fs.existsSync(file) ? `function featureEnabled(){return true;}\n${fs.readFileSync(file, 'utf8')}\ninstallThreadedReading();` : '';
+const pause = ms => new Promise(r => setTimeout(r, ms));
+const reply = (floor, body, author = `User${floor}`, style = '') => `<li class="content-item" id="${floor}" data-comment-id="${1000 + floor}" style="${style}"><div class="nsk-content-meta-info"><div class="avatar-wrapper"><img class="avatar-normal"></div><div><div class="author-info"><a class="author-name" href="/space/${floor}">${author}</a></div></div><div class="floor-link-wrapper"><a class="floor-link" href="#${floor}">#${floor}</a></div></div><article class="post-content">${body}</article><div class="comment-menu"><button class="native-reply">回复</button></div></li>`;
+const ref = (floor, topic = '123', page = 1) => `<a href="/member?t=User${floor}">@User${floor}</a> <a href="/post-${topic}-${page}#${floor}">#${floor}</a><br>`;
+async function setup(t, cards, options = {}) {
+  const dom = new JSDOM(`<html><head></head><body><header id="nsk-head"></header><main><div class="content-item" id="0"><div class="author-info"><a class="author-name">OP</a></div><article class="post-content">主题正文</article></div><div class="comment-container"><ul class="comments">${cards}</ul>${options.pagination || ''}</div>${options.editor ? '<div id="editor"><div class="md-editor"><div id="editor-body"><div class="CodeMirror"></div><textarea class="draft">未写完的草稿</textarea></div><div class="topic-select"><button class="submit">发布评论</button></div></div></div>' : ''}</main></body></html>`, { url: options.url || 'https://www.nodeseek.com/post-123-1', runScripts: 'outside-only', pretendToBeVisual: true });
+  const w = dom.window;
+  w.scrollTo = () => {};
+  w.HTMLElement.prototype.scrollIntoView = () => {};
+  const storage = options.storage || new Map();
+  w.GM_getValue = (k, d) => storage.has(k) ? storage.get(k) : d;
+  w.GM_setValue = (k, v) => storage.set(k, v);
+  w.GM_registerMenuCommand = () => {};
+  if (options.fetch) w.fetch = options.fetch;
+  const intersections = [];
+  w.IntersectionObserver = class {
+    constructor(callback) { this.callback=callback; intersections.push(this); }
+    observe(target) { this.target=target; }
+    disconnect() { this.target=null; }
+  };
+  if (options.init) options.init(w);
+  if (options.geometry) {
+    w.HTMLElement.prototype.getBoundingClientRect = function () {
+      const card = this.closest('li.content-item');
+      const rank = card ? Number(card.style.order || card.id) : 0;
+      const left = card ? 20 + Number(card.style.getPropertyValue('--nst-indent') || 0) * 22 : 0;
+      const top = rank * 120;
+      return {left,top,right:left+40,bottom:top+40,width:40,height:40,x:left,y:top};
+    };
+    w.HTMLElement.prototype.getClientRects = function () { return [this.getBoundingClientRect()]; };
+  }
+  w.eval(source);
+  await pause(120);
+  t.after(() => dom.window.close());
+  return { w, d: w.document, storage, bottom:()=>intersections.forEach(o=>{if(o.target)o.callback([{target:o.target,isIntersecting:true}]);}) };
+}
+function mode(d, value) {
+  const b = d.querySelector(`[data-nst-mode="${value}"]`);
+  assert.ok(b, `${value} mode control exists`);
+  b.click();
+}
+
+test('groups a reply under its parent while preserving native DOM and handlers', async t => {
+  const { d } = await setup(t, reply(1, '<p>第一条</p>') + reply(2, '<p>另一条</p>') + reply(3, `<p>${ref(1)}回答</p>`));
+  assert.equal(d.getElementById('3').dataset.nstDepth, '1');
+  assert.ok(Number(d.getElementById('3').style.order) < Number(d.getElementById('2').style.order));
+  let clicked = 0;
+  d.getElementById('3').querySelector('.native-reply').onclick = () => clicked++;
+  mode(d, 'quote'); mode(d, 'thread');
+  d.getElementById('3').querySelector('.native-reply').click();
+  assert.equal(clicked, 1);
+  assert.equal(d.querySelectorAll('[id="3"]').length, 1);
+});
+
+test('does not infer parents from a plain mention, another topic, a code sample or a quoted link', async t => {
+  const { d } = await setup(t, reply(1, 'one') + reply(2, '<p><a href="/member?t=User1">@User1</a> hello</p>') + reply(3, `<p>${ref(1, '999')}another topic</p>`) + reply(4, `<blockquote><p>${ref(1)}quotation</p></blockquote><p>My comment</p>`) + reply(5, `<pre><code>${ref(1)}</code></pre>`));
+  for (const id of ['2', '3', '4', '5']) assert.equal(d.getElementById(id).dataset.nstDepth, '0');
+});
+
+test('nested replies follow numeric ancestry even when pinned cards precede the parent', async t => {
+  const { d } = await setup(t, reply(4, `<p>${ref(3)}nested</p>`) + reply(1, 'one') + reply(2, 'two') + reply(3, `<p>${ref(1)}child</p>`));
+  assert.equal(d.getElementById('4').dataset.nstDepth, '2');
+  const visual = [...d.querySelectorAll('ul.comments > li')].sort((a,b) => Number(a.style.order) - Number(b.style.order)).map(n=>n.id);
+  assert.deepEqual(visual, ['1','3','4','2']);
+});
+
+test('keeps cross-page parents as explicit links without inventing local nesting', async t => {
+  const { d } = await setup(t, reply(11, `<p>${ref(2, '123', 1)}cross page</p>`), { url: 'https://www.nodeseek.com/post-123-2' });
+  assert.equal(d.getElementById('11').dataset.nstDepth, '0');
+  const link = d.querySelector('#\\31 1 .nst-relation a');
+  assert.ok(link);
+  assert.equal(link.getAttribute('href'), '/post-123-1#2');
+});
+
+test('quote mode shows a safe parent excerpt and raw mode restores exact card styles', async t => {
+  const oldStyle = 'margin-left: 7px !important; order: 9;';
+  const { d } = await setup(t, reply(1, '<p>父评论 <img alt="图片说明" src="/x.png"></p>') + reply(2, `<p>${ref(1)}answer</p>`, 'User2', oldStyle));
+  mode(d, 'quote');
+  assert.match(d.querySelector('.nst-auto-quote').textContent, /父评论/);
+  assert.equal(d.querySelector('.nst-auto-quote img'), null);
+  mode(d, 'raw');
+  assert.equal(d.getElementById('2').getAttribute('style'), oldStyle);
+  assert.equal(d.querySelector('.nst-auto-quote'), null);
+  assert.equal(d.querySelector('ul.comments').classList.contains('nst-thread'), false);
+  assert.ok(d.getElementById('2').querySelector('article a[href="/post-123-1#1"]'));
+});
+
+test('rejects self references and future floors', async t => {
+  const { d } = await setup(t, reply(1, `<p>${ref(1)}self</p>`) + reply(2, `<p>${ref(3)}future</p>`) + reply(3, 'three'));
+  assert.equal(d.getElementById('1').dataset.nstDepth, '0');
+  assert.equal(d.getElementById('2').dataset.nstDepth, '0');
+});
+
+test('reprocesses dynamically added replies without duplicate UI', async t => {
+  const { d } = await setup(t, reply(1, 'one'));
+  d.querySelector('ul.comments').insertAdjacentHTML('beforeend', reply(2, `<p>${ref(1)}dynamic</p>`));
+  await pause(180);
+  assert.equal(d.getElementById('2').dataset.nstDepth, '1');
+  assert.equal(d.querySelectorAll('.nst-modebar').length, 1);
+  assert.equal(d.querySelectorAll('.nst-relation').length, 1);
+});
+
+test('highlights only new replies on a previously visited page', async t => {
+  const storage = new Map();
+  const first = await setup(t, reply(1, 'one'), { storage });
+  first.w.dispatchEvent(new first.w.Event('pagehide'));
+  const second = await setup(t, reply(1, 'one') + reply(2, 'new'), { storage });
+  assert.equal(second.d.getElementById('1').classList.contains('nst-new'), false);
+  assert.equal(second.d.getElementById('2').classList.contains('nst-new'), true);
+  const third = await setup(t, reply(11, 'first visit of page two'), { storage, url:'https://www.nodeseek.com/post-123-2' });
+  assert.equal(third.d.getElementById('11').classList.contains('nst-new'), false);
+});
+
+test('caps deep indentation without losing reply relationships', async t => {
+  let cards = reply(1, 'root');
+  for (let i=2; i<=12; i++) cards += reply(i, `<p>${ref(i-1)}deep</p>`);
+  const { d } = await setup(t, cards);
+  assert.equal(d.getElementById('12').dataset.nstDepth, '11');
+  assert.ok(Number(d.getElementById('12').style.getPropertyValue('--nst-indent')) <= 4);
+});
+
+test('does not hide unrelated blockquotes in thread mode', async t => {
+  const { d } = await setup(t, reply(1, 'one') + reply(2, `<p>${ref(1)}answer</p><blockquote>保留的文献引用</blockquote>`));
+  assert.equal(d.querySelector('blockquote').textContent, '保留的文献引用');
+  assert.equal(d.querySelector('blockquote').classList.contains('nst-auto-quote'), false);
+});
+
+test('reply to floor zero jumps to the visible topic instead of requesting a preview', async t => {
+  const { d } = await setup(t, reply(1, `<p>${ref(0)}reply to topic</p>`));
+  assert.equal(d.querySelector('.nst-relation button'), null);
+  mode(d, 'quote');
+  assert.match(d.querySelector('.nst-auto-quote').textContent, /主题正文/);
+});
+
+test('cross-page preview renders text only and can be collapsed', async t => {
+  let calls = 0;
+  const fetch = async () => { calls++; return {ok:true,url:'https://www.nodeseek.com/post-123-1', text:async()=>`<ul class="comments">${reply(2, '<p>远端父评论<img src=x onerror="alert(1)"></p><script>alert(1)</script>')}</ul>`}; };
+  const { d } = await setup(t, reply(11, `<p>${ref(2)}cross page</p>`), {url:'https://www.nodeseek.com/post-123-2', fetch});
+  d.querySelector('.nst-relation button').click(); await pause(180);
+  assert.match(d.querySelector('.nst-auto-quote').textContent,/远端父评论/);
+  assert.equal(d.querySelector('.nst-auto-quote img,.nst-auto-quote script'),null);
+  assert.doesNotMatch(d.querySelector('.nst-auto-quote').textContent,/alert/);
+  d.querySelector('.nst-relation button').click();
+  assert.equal(d.querySelector('.nst-auto-quote'),null);
+  d.querySelector('.nst-relation button').click(); await pause(30);
+  assert.equal(calls,1);
+});
+
+test('a challenge page reports preview failure without inserting remote markup', async t => {
+  const { d } = await setup(t, reply(11, `<p>${ref(2)}cross page</p>`), {url:'https://www.nodeseek.com/post-123-2', fetch:async()=>({ok:true,text:async()=>'<h1>Just a moment</h1>'})});
+  d.querySelector('.nst-relation button').click(); await pause(30);
+  assert.equal(d.querySelector('.nst-auto-quote'),null);
+  assert.equal(d.querySelector('.nst-relation button').textContent,'重试预览');
+});
+
+test('leaving the topic restores styles and removes the controls', async t => {
+  const oldStyle = 'padding: 3px;';
+  const { w, d } = await setup(t, reply(1,'one','User1',oldStyle) + reply(2,`<p>${ref(1)}child</p>`));
+  w.history.pushState({},'', '/categories/daily'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(140);
+  assert.equal(d.querySelector('.nst-modebar'),null);
+  assert.equal(d.getElementById('1').getAttribute('style'),oldStyle);
+  assert.equal(d.querySelector('.nst-relation'),null);
+});
+
+test('checking for new replies requires explicit user action and preserves native nodes', async t => {
+  let calls = 0;
+  const fetch = async () => { calls++; return {ok:true,text:async()=>`<ul class="comments">${reply(1,'one')}${reply(2,'new')}</ul>`}; };
+  const { d } = await setup(t,reply(1,'one'),{fetch});
+  assert.equal(calls,0);
+  const card = d.getElementById('1');
+  [...d.querySelectorAll('.nst-modebar button')].find(n=>n.textContent==='检查新回复').click(); await pause(30);
+  assert.equal(calls,1);
+  assert.ok([...d.querySelectorAll('.nst-modebar button')].some(n=>n.textContent==='发现 1 条 · 刷新'));
+  assert.equal(d.getElementById('1'),card);
+  assert.equal(d.getElementById('2'),null);
+});
+
+test('scrolling preserves existing connector nodes when layout has not changed', async t => {
+  const { w, d } = await setup(t,reply(1,'one') + reply(2,`<p>${ref(1)}child</p>`),{geometry:true});
+  const path = d.querySelector('.nst-connectors path');
+  assert.ok(path);
+  w.dispatchEvent(new w.Event('scroll')); await pause(40);
+  assert.equal(d.querySelector('.nst-connectors path'),path);
+});
+
+const pager = page => `<div class="nsk-pager post-bottom-pager"><div aria-label="pagination"><a rel="next" href="/post-123-${page}">${page}</a></div></div>`;
+test('scrolling to the end loads the next page once, deduplicates pins and joins reply ancestry', async t => {
+  let calls=0, resolve;
+  const response = new Promise(r=>resolve=r);
+  const { d, bottom } = await setup(t,reply(1,'root'),{pagination:pager(2),fetch:()=>{calls++;return response;}});
+  bottom(); bottom();
+  assert.equal(calls,1);
+  resolve({ok:true,url:'https://www.nodeseek.com/post-123-2',text:async()=>`<ul class="comments">${reply(1,'pinned')}${reply(11,`<p>${ref(1)}next-page reply</p>`)}</ul>`});
+  await pause(180);
+  assert.equal(d.querySelectorAll('[id="1"]').length,1);
+  assert.equal(d.getElementById('11')?.dataset.nstDepth,'1');
+  assert.equal(d.getElementById('11').classList.contains('nst-new'),false);
+  assert.equal(d.getElementById('11').querySelector('.floor-link').getAttribute('href'),'/post-123-2#11');
+  bottom(); await pause(30); assert.equal(calls,1);
+  assert.match(d.querySelector('.nst-auto-load').textContent,/全部|末尾/);
+});
+
+test('loading failure keeps existing comments and can retry on a later scroll', async t => {
+  let calls=0;
+  const { w,d,bottom } = await setup(t,reply(1,'keep'),{pagination:pager(2),fetch:async()=>{calls++;return {ok:false,status:503};}});
+  bottom(); await pause(30);
+  assert.equal(d.getElementById('1').querySelector('article').textContent,'keep');
+  assert.match(d.querySelector('.nst-auto-load').textContent,/失败/);
+  bottom(); assert.equal(calls,1);
+  const now=w.Date.now(); w.Date.now=()=>now+10000;
+  w.dispatchEvent(new w.Event('scroll')); bottom(); await pause(30);
+  assert.equal(calls,2);
+});
+
+test('a late pagination response does not append to a different route', async t => {
+  let resolve;
+  const {w,d,bottom}=await setup(t,reply(1,'one'),{pagination:pager(2),fetch:()=>new Promise(r=>resolve=r)});
+  bottom();
+  w.history.pushState({},'','/categories/daily'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(130);
+  resolve({ok:true,text:async()=>`<ul class="comments">${reply(11,'late')}</ul>`}); await pause(60);
+  assert.equal(d.getElementById('11'),null);
+  assert.equal(d.querySelector('.nst-auto-load'),null);
+});
+
+test('fixes the original editor, expands on reply and preserves draft and submit listener', async t => {
+  const {d}=await setup(t,reply(1,'one'),{editor:true});
+  const editor=d.getElementById('editor'), draft=d.querySelector('.draft');
+  assert.ok(editor.classList.contains('nst-fixed-editor'));
+  assert.ok(d.querySelector('.nst-editor-spacer'));
+  d.querySelector('.native-reply').click(); await pause(30);
+  assert.equal(editor.classList.contains('nst-editor-collapsed'),false);
+  assert.equal(d.querySelector('.draft'),draft);
+  assert.equal(draft.value,'未写完的草稿');
+  let submits=0;d.querySelector('.submit').onclick=()=>submits++;
+  d.querySelector('.nst-editor-toggle').click();d.querySelector('.nst-editor-toggle').click();
+  d.querySelector('.submit').click();assert.equal(submits,1);
+});
+
+test('newly loaded reply uses the same native editor and keeps existing draft content', async t => {
+  const {d,bottom}=await setup(t,reply(1,'root'),{editor:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul>`}),init:w=>{
+    w.__config__={postData:{postId:123,comments:[]}};
+    w.editor={reply(i){w.document.querySelector('.draft').value+=` @${w.__config__.postData.comments[i].poster.name}`;},quote(){}};
+  }});
+  bottom();await pause(150);
+  const card=d.getElementById('11');assert.ok(card);
+  [...card.querySelectorAll('button,.menu-item')].find(n=>n.textContent.trim()==='回复').click();await pause(30);
+  assert.match(d.querySelector('.draft').value,/未写完的草稿.*@User11/);
+  assert.equal(d.getElementById('editor').classList.contains('nst-editor-collapsed'),false);
+});
+
+test('appended HTML is sanitized and its unsafe menu is replaced with working actions', async t => {
+  const {d,bottom}=await setup(t,reply(1,'one'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'<p onclick="evil()">safe<img src=x onerror="evil()"><script>evil()</script><a href="javascript:evil()">bad</a></p>')}</ul>`})});
+  bottom();await pause(150);
+  const card=d.getElementById('11');assert.ok(card);
+  assert.equal(card.querySelector('script,[onclick],[onerror],[href^="javascript:"]'),null);
+  assert.ok([...card.querySelectorAll('button')].some(b=>b.textContent==='回复'));
+});
+
+test('continues loading while a short or duplicate-only page leaves the sentinel in view', async t => {
+  const calls=[];
+  const {d,bottom}=await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async url=>{
+    calls.push(url);
+    const page=Number(url.match(/-(\d+)$/)[1]);
+    return {ok:true,text:async()=>`<ul class="comments">${page===2?reply(1,'duplicate pinned'):reply(21,'last page')}</ul>${page===2?pager(3):''}`};
+  }});
+  bottom(); await pause(220);
+  assert.deepEqual(calls,['/post-123-2','/post-123-3']);
+  assert.ok(d.getElementById('21'));
+  assert.equal(d.querySelectorAll('[id="1"]').length,1);
+});
+
+test('reuses native menus with the imported metadata index and releases them on navigation', async t => {
+  const imported={floorIndex:11,commentId:1011,poster:{name:'Imported'},markdown:'original markdown',time:{createdDate:'2026-10-21',editedDate:null}};
+  let mounted=0,destroyed=0,replyIndex=-1;
+  const {w,d,bottom}=await setup(t,reply(1,'root'),{editor:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><script>window.__config__=${JSON.stringify({postData:{postId:123,comments:[imported]}})};</script>`}),init:w=>{
+    w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+    w.editor={reply(i){replyIndex=i;}};
+    class Menu {
+      setIndex(i){this.index=i;assert.equal(w.__config__.postData.comments[i].markdown,'original markdown');}
+      $mount(node){mounted++;node.className='comment-menu';const b=w.document.createElement('button');b.textContent='回复';b.onclick=()=>w.editor.reply(this.index);node.append(b);}
+      $destroy(){destroyed++;}
+    }
+    w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+  }});
+  bottom();await pause(150);
+  assert.equal(mounted,1);
+  d.getElementById('11').querySelector('button').click();assert.equal(replyIndex,1);
+  assert.equal(w.__config__.postData.comments.length,2);
+  w.history.pushState({},'','/categories/daily');w.dispatchEvent(new w.PopStateEvent('popstate'));await pause(150);
+  assert.equal(destroyed,1);assert.equal(w.__config__.postData.comments.length,1);
+  assert.equal(d.getElementById('editor').classList.contains('nst-fixed-editor'),false);
+  assert.equal(d.querySelector('.draft').value,'未写完的草稿');
+});

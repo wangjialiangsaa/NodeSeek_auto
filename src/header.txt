@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name         NodeSeek Issue Templates
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.50
-// @description  在 NodeSeek 发帖或编辑帖页面用表单生成交易帖，并回填 Markdown 编辑器。
-// @author       vico
-// @updateURL    https://github.com/ruoqianfengshao/nodeseek-issue-template/releases/latest/download/NodeSeek.Issue.Templates.min.user.js
-// @downloadURL  https://github.com/ruoqianfengshao/nodeseek-issue-template/releases/latest/download/NodeSeek.Issue.Templates.min.user.js
+// @version      1.4.51
+// @description  NodeSeek 交易帖模板、抽奖与回复追踪，支持楼中楼阅读、下滑自动翻页和底部固定回复栏。
+// @author       vico, wangjialiangsaa
+// @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
+// @supportURL   https://github.com/wangjialiangsaa/nodeseek-issue-template/issues
+// @updateURL    https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js
+// @downloadURL  https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js
 // @match        https://www.nodeseek.com/*
+// @match        https://nodeseek.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
