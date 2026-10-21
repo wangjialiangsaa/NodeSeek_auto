@@ -333,8 +333,9 @@ function installThreadedReading() {
   function relation(body, floor, topic) {
     if (!body) return null;
     const first = [...body.childNodes].find(n => n.nodeType === 1 || n.textContent.trim());
-    if (!first || first.nodeType !== 1 || !['P','DIV'].includes(first.tagName)) return null;
-    for (const link of first.querySelectorAll('a[href]')) {
+    const links = [...body.querySelectorAll('a[href]')], candidates = [];
+    const nonText = 'br,hr,img,picture,svg,video,audio,iframe,object,embed,input,button';
+    for (const [index, link] of links.entries()) {
       if (link.closest('blockquote,pre,code')) continue;
       let url;
       try { url = new URL(link.getAttribute('href'), location.href); } catch { continue; }
@@ -344,22 +345,33 @@ function installThreadedReading() {
       if (!target || target[1] !== topic || !hash || link.textContent.trim() !== `#${Number(hash[1])}`) continue;
       const parent = Number(hash[1]);
       if (!Number.isSafeInteger(parent) || parent < 0 || parent >= floor) continue;
+      let block = link.closest('p,div');
+      if (!block || !body.contains(block)) block = body;
+      const previous = links[index - 1];
+      let mention = null;
       const range = document.createRange();
-      range.setStart(first, 0);
+      if (previous && block.contains(previous) && previous.textContent.trim().startsWith('@') && previous.textContent.trim().length > 1 && !previous.closest('blockquote,pre,code')) {
+        try {
+          const profile = new URL(previous.getAttribute('href'), location.href);
+          const nativeProfile = /^\/space\/\d+\/?$/.test(profile.pathname) || (/^\/member\/?$/.test(profile.pathname) && profile.searchParams.get('t'));
+          range.setStartAfter(previous); range.setEndBefore(link);
+          if (profile.origin === location.origin && nativeProfile && !range.toString().trim() && !range.cloneContents().querySelector(nonText)) mention = previous;
+        } catch { /* Invalid profile links cannot identify a reply recipient. */ }
+      }
+      range.setStart(block, 0);
       range.setEndBefore(link);
       const before = range.toString().trim();
-      const mention = [...first.querySelectorAll('a[href]')].find(a => a !== link && a.textContent.trim().startsWith('@') && !a.closest('blockquote,pre,code'));
-      // Only accept the leading native reply header, not a link in ordinary prose.
-      if (before && (!mention || before !== mention.textContent.trim())) continue;
-      const prefix = [];
-      for (const child of first.childNodes) {
-        if (child === link) { prefix.push(child); break; }
-        prefix.push(child);
-      }
-      if (link.nextSibling?.nodeName === 'BR') prefix.push(link.nextSibling);
-      return { parent, href:`/post-${topic}-${Number(target[2])}#${parent}`, author:mention?.textContent.trim().replace(/^@/, '') || '', prefix };
+      const leading = block === first && (!before || (mention && before === mention.textContent.trim())) && !range.cloneContents().querySelector(nonText);
+      // Native replies can append the adjacent @recipient / #floor pair after prose.
+      // A standalone floor link still qualifies only at the start of the body.
+      if (!leading && !mention) continue;
+      const prefix = leading ? [...(mention ? [mention] : []), link] : [];
+      if (leading && link.nextSibling?.nodeName === 'BR') prefix.push(link.nextSibling);
+      const ref = { parent, href:`/post-${topic}-${Number(target[2])}#${parent}`, author:mention?.textContent.trim().replace(/^@/, '') || '', prefix };
+      if (leading) return ref;
+      candidates.push(ref);
     }
-    return null;
+    return candidates.length && candidates.every(ref => ref.parent === candidates[0].parent) ? candidates[0] : null;
   }
 
   function persist(s) {

@@ -54,6 +54,10 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     assert.equal(d.getElementById('nsit-app').classList.contains('nsit-open'),false);
     assert.ok(d.querySelector('.nst-modebar'));
     assert.equal(d.getElementById('2').dataset.nstDepth,'1');
+    d.getElementById('2').querySelector('.post-content').innerHTML='<p><strong>正文保留</strong>，句末回复 <a href="/member?t=User1">@User1</a> <a href="/post-123-1#1">#1</a></p>';
+    await pause(160);
+    assert.equal(d.getElementById('2').dataset.nstDepth,'1');
+    assert.equal(d.getElementById('2').querySelector('strong').closest('.nst-reply-prefix'),null);
     assert.equal(d.getElementById('editor'),editor);
     assert.ok(editor.classList.contains('nst-fixed-editor'));
     assert.equal(cm.getValue(),'existing draft');

@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.54**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.55**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -100,7 +100,7 @@
 
 楼中楼、自动续页和固定回复栏默认开启，可在油猴菜单的“功能开关 → 楼中楼阅读”即时关闭或恢复。“原始”只切换评论排列，续页和固定栏仍保留。未加载的父评论可以跳转或预览；导入评论不能复用原生菜单时，提供“引用 / 回复 / 原页操作”，后者可在原页进行点赞、加鸡腿等操作。加载失败后，等待几秒继续下滑即可重试。
 
-阅读进度针对当前已加载的评论。只有开头明确指向本帖较早 `#楼层` 的原生回复链接用于判断父子关系，普通 `@用户名` 不会被误排为子回复。更多说明见[楼中楼整合说明](docs/threaded-reading.md)。
+阅读进度针对当前已加载的评论。正文开头的本帖较早 `#楼层` 链接，以及句中、句末相邻的站内 `@用户名 #楼层` 回复链接，可用于判断父子关系；支持连续多层回复。普通 `@用户名`、正文中单独提及的楼层链接、引用块和代码不用于归组。更多说明见[楼中楼整合说明](docs/threaded-reading.md)。
 
 ## 抽奖
 

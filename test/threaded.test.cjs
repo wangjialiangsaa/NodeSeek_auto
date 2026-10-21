@@ -70,6 +70,51 @@ test('nested replies follow numeric ancestry even when pinned cards precede the 
   assert.deepEqual(visual, ['1','3','4','2']);
 });
 
+test('groups the screenshot conversation when native reply links follow the message', async t => {
+  const { d } = await setup(t,
+    reply(14, '<p>交易说明</p>', 'magnorns') +
+    reply(15, '<p>1750出给你了，改油<a href="/member?t=magnorns">@magnorns</a> <a href="/post-123-1#14">#14</a></p>', 'wandu') +
+    reply(16, '<p><a href="/member?t=wandu">@wandu</a> <a href="/post-123-1#15">#15</a><br>好，没问题</p>', 'magnorns') +
+    reply(17, '<p><strong>怎么交易</strong>，中介的话我不出中介费，而且找个靠谱的中介<a href="/member?t=magnorns">@magnorns</a> <a href="/post-123-1#16">#16</a></p>', 'wandu'));
+  for (const [floor, depth] of [['14','0'],['15','1'],['16','2'],['17','3']]) assert.equal(d.getElementById(floor).dataset.nstDepth, depth);
+  const last=d.getElementById('17');
+  assert.equal(last.querySelector('.nst-relation a').getAttribute('href'), '/post-123-1#16');
+  assert.match(last.querySelector('.nst-relation').textContent, /magnorns/);
+  assert.equal(last.querySelector('strong').closest('.nst-reply-prefix'), null);
+  assert.match(last.querySelector('.post-content').textContent, /怎么交易，中介的话我不出中介费，而且找个靠谱的中介/);
+  mode(d,'raw');assert.equal(last.querySelector('.nst-relation'),null);
+  assert.equal(last.querySelector('strong').closest('.nst-reply-prefix'),null);
+  assert.ok(last.querySelector('a[href="/post-123-1#16"]'));
+});
+
+test('recognizes a native reply pair in a later paragraph with inline formatting', async t => {
+  const {d}=await setup(t,reply(1,'parent')+reply(2,'<p>第一段正文</p><p>第二段 <strong><a href="/space/1">@User1</a></strong> <em><a href="/post-123-1#1">#1</a></em></p>'));
+  const child=d.getElementById('2');assert.equal(child.dataset.nstDepth,'1');
+  assert.equal(child.querySelector('.nst-relation a').getAttribute('href'),'/post-123-1#1');
+  assert.equal(child.querySelector('.post-content').textContent,'第一段正文第二段 @User1 #1');
+  assert.equal(child.querySelector('strong').closest('.nst-reply-prefix'),null);
+});
+
+test('wrapped leading reply headers never hide the message contained in the same wrapper',async t=>{
+  const {d}=await setup(t,reply(1,'parent')+reply(2,`<p><span>${ref(1)}<strong>必须保留的正文</strong></span></p>`));
+  const child=d.getElementById('2');assert.equal(child.dataset.nstDepth,'1');
+  assert.equal(child.querySelector('strong').closest('.nst-reply-prefix'),null);
+  mode(d,'quote');assert.match(child.querySelector('.post-content').textContent,/必须保留的正文/);
+});
+
+test('ignores ordinary references, separated mentions, quoted pairs and ambiguous reply targets',async t=>{
+  const {d}=await setup(t,reply(1,'one')+reply(2,'two')+
+    reply(3,'<p>参见 <a href="/post-123-1#1">#1</a></p>')+
+    reply(4,'<p>正文 <a href="/member?t=User1">@User1</a> 提到的 <a href="/post-123-1#1">#1</a></p>')+
+    reply(5,`<p>正文</p><blockquote><p>${ref(1)}引用</p></blockquote>`)+
+    reply(6,`<p>正文</p><pre><code>${ref(1)}</code></pre>`)+
+    reply(7,'<p>正文 <a href="https://example.com/member?t=User1">@User1</a> <a href="/post-123-1#1">#1</a></p>')+
+    reply(8,`<p>同时回复 ${ref(1)}和 ${ref(2)}</p>`)+
+    reply(9,`<p>正文 <code>${ref(1)}</code></p>`)+
+    reply(10,`<p>正文 ${ref(1,'999')}</p>`));
+  for(const id of ['3','4','5','6','7','8','9','10'])assert.equal(d.getElementById(id).dataset.nstDepth,'0',`floor ${id}`);
+});
+
 test('keeps cross-page parents as explicit links without inventing local nesting', async t => {
   const { d } = await setup(t, reply(11, `<p>${ref(2, '123', 1)}cross page</p>`), { url: 'https://www.nodeseek.com/post-123-2' });
   assert.equal(d.getElementById('11').dataset.nstDepth, '0');
