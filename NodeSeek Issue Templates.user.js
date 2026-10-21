@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         NodeSeek Issue Templates
+// @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.53
+// @version      1.4.54
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.53';
+  const VERSION = '1.4.54';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';

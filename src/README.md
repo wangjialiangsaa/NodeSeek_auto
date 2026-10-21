@@ -1,4 +1,4 @@
-# NodeSeek Issue Templates 源码
+# NodeSeek auto 源码
 
 - `config.js`：常量、字段配置与选项。
 - `ui.js`：表单模板、通过 `GM_addStyle` 注入的样式与多机器书签界面。
