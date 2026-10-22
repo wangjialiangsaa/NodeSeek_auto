@@ -29,4 +29,4 @@
 
 ## 来源与更新
 
-保留原项目 vico 的署名、namespace 和已有存储键，脚本名称为 NodeSeek auto。安装、更新、主页、问题反馈和脚本内 GitHub 入口均指向 `wangjialiangsaa/nodeseek-issue-template`；价值卡片静态背景也从本仓库读取。共享配置库继续使用既有公共服务。
+保留原项目 vico 的署名、namespace 和已有存储键，脚本名称为 NodeSeek auto。安装、更新、主页、问题反馈和脚本内 GitHub 入口均指向 `wangjialiangsaa/NodeSeek_auto`；价值卡片静态背景也从本仓库读取。共享配置库继续使用既有公共服务。

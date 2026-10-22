@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.64
+// @version      1.4.65
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
-// @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
-// @supportURL   https://github.com/wangjialiangsaa/nodeseek-issue-template/issues
-// @updateURL    https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js
-// @downloadURL  https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js
+// @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
+// @supportURL   https://github.com/wangjialiangsaa/NodeSeek_auto/issues
+// @updateURL    https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js
+// @downloadURL  https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js
 // @match        https://www.nodeseek.com/*
 // @match        https://nodeseek.com/*
 // @grant        GM_xmlhttpRequest

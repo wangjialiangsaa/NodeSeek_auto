@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.64';
+  const VERSION = '1.4.65';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -37,11 +37,11 @@
     ['custom', '自定义背景'],
   ];
   const VALUE_CARD_BACKGROUNDS = {
-    'stardew-spring': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-spring.jpg',
-    'stardew-summer': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-summer.jpg',
-    'stardew-autumn': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-autumn.jpg',
-    'stardew-winter': 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/stardew-winter.jpg',
-    tank: 'https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/assets/value-cards/tank.png',
+    'stardew-spring': 'https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/assets/value-cards/stardew-spring.jpg',
+    'stardew-summer': 'https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/assets/value-cards/stardew-summer.jpg',
+    'stardew-autumn': 'https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/assets/value-cards/stardew-autumn.jpg',
+    'stardew-winter': 'https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/assets/value-cards/stardew-winter.jpg',
+    tank: 'https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/assets/value-cards/tank.png',
   };
   const RENEWAL_FIELD_OPTIONS = [
     ['renewal', '续费金额 / 周期'], ['expiryDate', '到期日期'], ['tradeDate', '交易日期'], ['remainingValue', '剩余价值'],
