@@ -79,12 +79,31 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     flag.checked=false;flag.dispatchEvent(new d.defaultView.Event('change',{bubbles:true}));await pause(120);
     assert.equal(d.querySelector('.nst-modebar'),null);
     assert.equal(editor.classList.contains('nst-fixed-editor'),false);
+    assert.equal(d.querySelector('.nst-branch-toggle,.nst-branch-hidden,.nst-has-children'),null);
     assert.equal(d.querySelector('.post-bottom-pager').classList.contains('nst-pagination-hidden'),false);
     assert.equal(cm.getValue(),'existing draft');
     assert.ok(d.querySelector('.nsit-trigger'));
     flag.checked=true;flag.dispatchEvent(new d.defaultView.Event('change',{bubbles:true}));await pause(120);
     assert.equal(d.querySelectorAll('.nst-modebar').length,1);
     assert.equal(d.querySelectorAll('.nst-editor-head').length,1);
+    const fold=d.getElementById('1').querySelector('.nst-branch-toggle');assert.ok(fold);
+    fold.click();
+    assert.equal(d.getElementById('2').classList.contains('nst-branch-hidden'),true);
+    flag.checked=false;flag.dispatchEvent(new d.defaultView.Event('change',{bubbles:true}));await pause(120);
+    assert.equal(d.querySelector('.nst-branch-toggle,.nst-branch-hidden,.nst-branch-collapsed'),null);
+    assert.equal(d.getElementById('2').style.getPropertyValue('--nst-toggle-x'),'');
+    assert.equal(cm.getValue(),'existing draft');
+  });
+  test(`${file}: My replies reveals a folded native floor before scrolling`,async t=>{
+    const {w,d}=await setup(t,file);
+    let scrolledTo=null, visible=false;
+    w.HTMLElement.prototype.scrollIntoView=function(){scrolledTo=this;visible=!this.classList.contains('nst-branch-hidden');};
+    const fold=d.getElementById('1').querySelector('.nst-branch-toggle');assert.ok(fold);fold.click();
+    const button=d.createElement('button');button.dataset.nsitRepliedFloor='2';d.body.append(button);
+    button.click();
+    assert.equal(scrolledTo,d.getElementById('2'),'My replies targets the native numeric comment ID');
+    assert.equal(visible,true,'My replies reveals the floor before scrolling');
+    assert.equal(fold.getAttribute('aria-expanded'),'true');
   });
 }
 

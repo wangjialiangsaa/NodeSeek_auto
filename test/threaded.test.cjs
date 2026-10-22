@@ -27,13 +27,14 @@ async function setup(t, cards, options = {}) {
   if (options.init) options.init(w);
   if (options.geometry) {
     w.HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.closest('.nst-branch-hidden')) return {left:0,top:0,right:0,bottom:0,width:0,height:0,x:0,y:0};
       const card = this.closest('li.content-item');
       const rank = card ? Number(card.style.order || card.id) : 0;
       const left = card ? 20 + Number(card.style.getPropertyValue('--nst-indent') || 0) * 22 : 0;
       const top = rank * 120;
       return {left,top,right:left+40,bottom:top+40,width:40,height:40,x:left,y:top};
     };
-    w.HTMLElement.prototype.getClientRects = function () { return [this.getBoundingClientRect()]; };
+    w.HTMLElement.prototype.getClientRects = function () { return this.closest('.nst-branch-hidden') ? [] : [this.getBoundingClientRect()]; };
   }
   w.eval(source);
   await pause(120);
@@ -44,6 +45,14 @@ function mode(d, value) {
   const b = d.querySelector(`[data-nst-mode="${value}"]`);
   assert.ok(b, `${value} mode control exists`);
   b.click();
+}
+function branchToggle(d, floor) {
+  const button = d.getElementById(String(floor)).querySelector('button.nst-branch-toggle');
+  assert.ok(button, `floor ${floor} has a branch toggle`);
+  return button;
+}
+function hiddenFloors(d) {
+  return [...d.querySelectorAll('ul.comments > li.nst-branch-hidden')].map(card=>Number(card.id)).sort((a,b)=>a-b);
 }
 
 test('groups a reply under its parent while preserving native DOM and handlers', async t => {
@@ -382,4 +391,214 @@ test('reuses native menus with the imported metadata index and releases them on 
   assert.equal(destroyed,1);assert.equal(w.__config__.postData.comments.length,1);
   assert.equal(d.getElementById('editor').classList.contains('nst-fixed-editor'),false);
   assert.equal(d.querySelector('.draft').value,'未写完的草稿');
+});
+
+test('branch folding preserves independent nested state and native reply and quote handlers', async t => {
+  let original, nativeReply, nativeQuote;
+  const actions = [];
+  const { w, d } = await setup(t, reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild') + reply(4,ref(1)+'sibling') + reply(5,'independent root'), {init:w=>{
+    original=w.document.getElementById('3');
+    nativeReply=original.querySelector('.native-reply');
+    nativeReply.addEventListener('click',()=>actions.push('reply'));
+    nativeQuote=w.document.createElement('button'); nativeQuote.textContent='引用';
+    nativeQuote.addEventListener('click',()=>actions.push('quote'));
+    original.querySelector('.comment-menu').append(nativeQuote);
+  }});
+  const root=branchToggle(d,1), nested=branchToggle(d,2);
+  assert.equal(root.type,'button'); assert.equal(nested.type,'button');
+  assert.equal(root.getAttribute('aria-expanded'),'true');
+  const count=root.querySelector('.nst-branch-count'); assert.ok(count);
+  assert.ok(count.hidden || w.getComputedStyle(count).display==='none','expanded branches hide the folded count');
+  for(const id of [3,4,5]) assert.equal(d.getElementById(String(id)).querySelector('.nst-branch-toggle'),null,'leaf comments have no fold control');
+  nested.click();
+  assert.deepEqual(hiddenFloors(d),[3]);
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[2,3,4]);
+  assert.equal(d.getElementById('1').classList.contains('nst-branch-collapsed'),true);
+  assert.equal(w.getComputedStyle(d.getElementById('1')).display==='none',false,'the parent remains visible');
+  assert.equal(w.getComputedStyle(d.getElementById('3')).display,'none','hidden descendants are actually removed from layout');
+  assert.equal(branchToggle(d,1).querySelector('.nst-branch-count').textContent.trim(),'另外 3 条回复');
+  assert.notEqual(w.getComputedStyle(branchToggle(d,1).querySelector('.nst-branch-count')).display,'none');
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[3]);
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false','reopening the parent preserves the nested fold');
+  branchToggle(d,2).click();
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(d.getElementById('3'),original);
+  assert.equal(original.querySelector('.native-reply'),nativeReply);
+  assert.ok(original.contains(nativeQuote));
+  nativeReply.click(); nativeQuote.click();
+  assert.deepEqual(actions,['reply','quote']);
+  assert.equal(d.querySelectorAll('ul.comments > li.content-item').length,5,'native comments remain direct list children');
+});
+
+test('branch folding survives dynamic descendants and updates the total hidden reply count', async t => {
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,'independent'));
+  const original=d.getElementById('1');
+  branchToggle(d,1).click();
+  d.querySelector('ul.comments').insertAdjacentHTML('beforeend',reply(4,ref(2)+'new grandchild') + reply(5,ref(1)+'new sibling'));
+  await pause(180);
+  assert.deepEqual(hiddenFloors(d),[2,4,5]);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  assert.equal(branchToggle(d,1).querySelector('.nst-branch-count').textContent.trim(),'另外 3 条回复');
+  assert.equal(d.getElementById('1'),original);
+  assert.equal(original.querySelectorAll('.nst-branch-toggle').length,1);
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+});
+
+test('branch folding includes newly loaded page descendants without hiding another root', async t => {
+  const { d, bottom } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child'), {pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(1,'pinned duplicate')}${reply(11,ref(2)+'new grandchild')}${reply(12,ref(1)+'new sibling')}${reply(13,'independent root')}</ul>`})});
+  const original=d.getElementById('2');
+  branchToggle(d,1).click(); bottom(); await pause(180);
+  assert.deepEqual(hiddenFloors(d),[2,11,12]);
+  assert.equal(branchToggle(d,1).querySelector('.nst-branch-count').textContent.trim(),'另外 3 条回复');
+  assert.equal(d.getElementById('2'),original);
+  assert.equal(d.querySelectorAll('[id="1"]').length,1);
+  assert.equal(d.getElementById('13').classList.contains('nst-branch-hidden'),false);
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(d.getElementById('11').dataset.nstDepth,'2');
+});
+
+test('branch folding is suspended in quote and raw modes and fully cleared on navigation', async t => {
+  const rootStyle='padding: 3px;', childStyle='margin-left: 7px !important; order: 9;';
+  const { w, d } = await setup(t,reply(1,'root','User1',rootStyle) + reply(2,ref(1)+'child','User2',childStyle) + reply(3,ref(2)+'grandchild'));
+  const original=d.getElementById('2');
+  branchToggle(d,2).click(); branchToggle(d,1).click();
+  for(const value of ['quote','raw']) {
+    mode(d,value);
+    assert.equal(d.querySelector('.nst-branch-toggle,.nst-branch-hidden,.nst-branch-collapsed'),null);
+    assert.equal(d.getElementById('1').getAttribute('style'),rootStyle);
+    assert.equal(original.getAttribute('style'),childStyle);
+    assert.equal(d.getElementById('2'),original);
+    mode(d,'thread');
+    assert.deepEqual(hiddenFloors(d),[2,3]);
+    assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+    assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+  }
+  w.history.pushState({},'','/categories/daily'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(140);
+  assert.equal(d.querySelector('.nst-branch-toggle,.nst-branch-hidden,.nst-branch-collapsed,.nst-connectors'),null);
+  assert.equal(d.getElementById('1').getAttribute('style'),rootStyle);
+  assert.equal(original.getAttribute('style'),childStyle);
+  w.history.pushState({},'','/post-123-1'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(140);
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true','a fresh route does not inherit the previous route fold state');
+});
+
+test('branch folding follows all descendants beyond the visual indentation cap', async t => {
+  let cards=reply(1,'root');
+  for(let floor=2;floor<=12;floor++) cards+=reply(floor,ref(floor-1)+'deep reply');
+  const { d } = await setup(t,cards+reply(13,'independent root'));
+  assert.equal(d.getElementById('12').dataset.nstDepth,'11');
+  assert.ok(Number(d.getElementById('12').style.getPropertyValue('--nst-indent'))<=4);
+  branchToggle(d,11).click(); branchToggle(d,2).click();
+  assert.deepEqual(hiddenFloors(d),[3,4,5,6,7,8,9,10,11,12]);
+  assert.equal(branchToggle(d,2).querySelector('.nst-branch-count').textContent.trim(),'另外 10 条回复');
+  branchToggle(d,2).click();
+  assert.deepEqual(hiddenFloors(d),[12]);
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[2,3,4,5,6,7,8,9,10,11,12]);
+  assert.equal(branchToggle(d,1).querySelector('.nst-branch-count').textContent.trim(),'另外 11 条回复');
+  assert.equal(d.getElementById('13').classList.contains('nst-branch-hidden'),false);
+});
+
+test('branch folding opens every ancestor before locating a new reply', async t => {
+  const storage=new Map([['nst:page:123:1',{known:[1,2,4,5],pending:[]}]]);
+  let scrolledTo=null, visibleAtScroll=false;
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'new grandchild') + reply(4,ref(1)+'sibling') + reply(5,'independent root'),{storage,init:w=>{
+    w.HTMLElement.prototype.scrollIntoView=function(){scrolledTo=this.id;visibleAtScroll=!this.classList.contains('nst-branch-hidden') && w.getComputedStyle(this).display!=='none';};
+  }});
+  assert.equal(d.getElementById('3').classList.contains('nst-new'),true);
+  branchToggle(d,2).click(); branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[2,3,4]);
+  d.querySelector('.nst-updates').click(); await pause(40);
+  assert.equal(scrolledTo,'3');
+  assert.equal(visibleAtScroll,true,'the target is revealed before scrolling');
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(d.getElementById('3').classList.contains('nst-new'),false);
+});
+
+test('branch folding removes hidden SVG connections while preserving visible branches', async t => {
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild') + reply(4,ref(1)+'sibling') + reply(5,'independent root') + reply(6,ref(5)+'other child'),{geometry:true});
+  const initial=d.querySelectorAll('.nst-connectors path').length;
+  assert.ok(initial>1);
+  branchToggle(d,1).click(); await pause(40);
+  const remaining=d.querySelectorAll('.nst-connectors path').length;
+  assert.ok(remaining>0 && remaining<initial,'only visible branches retain connector paths');
+  branchToggle(d,5).click(); await pause(40);
+  assert.equal(d.querySelectorAll('.nst-connectors path').length,0,'no paths remain when every child is hidden');
+  branchToggle(d,1).click(); await pause(40);
+  assert.ok(d.querySelectorAll('.nst-connectors path').length>0,'expanding a branch restores its connections');
+  assert.equal(d.getElementById('6').classList.contains('nst-branch-hidden'),true,'the other branch stays folded');
+});
+
+test('branch folding reveals a hashchange target without opening an unrelated branch', async t => {
+  const { w, d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'target') + reply(4,'other root') + reply(5,ref(4)+'other child'));
+  branchToggle(d,2).click(); branchToggle(d,1).click(); branchToggle(d,4).click();
+  assert.deepEqual(hiddenFloors(d),[2,3,5]);
+  w.location.hash='#3'; await pause(140);
+  assert.equal(w.location.hash,'#3');
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,4).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[5]);
+});
+
+test('branch folding reveals a custom floor event target without opening an unrelated branch', async t => {
+  const { w, d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'target') + reply(4,'other root') + reply(5,ref(4)+'other child'));
+  branchToggle(d,2).click(); branchToggle(d,1).click(); branchToggle(d,4).click();
+  assert.deepEqual(hiddenFloors(d),[2,3,5]);
+  d.dispatchEvent(new w.CustomEvent('nsit:reveal-floor',{detail:{floor:3}})); await pause(40);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,4).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[5]);
+});
+
+test('branch folding reveals repeated clicks on a link whose hash is already current', async t => {
+  const { w, d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'target'),{url:'https://www.nodeseek.com/post-123-1#3',init:w=>{
+    w.document.getElementById('0').querySelector('article').insertAdjacentHTML('beforeend','<a id="jump-again" href="#3">查看 #3</a>');
+  }});
+  const link=d.getElementById('jump-again');
+  let hashChanges=0; w.addEventListener('hashchange',()=>hashChanges++);
+  for(let attempt=0;attempt<2;attempt++) {
+    branchToggle(d,2).click(); branchToggle(d,1).click();
+    assert.deepEqual(hiddenFloors(d),[2,3]);
+    link.click(); await pause(140);
+    assert.equal(w.location.hash,'#3');
+    assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+    assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+    assert.deepEqual(hiddenFloors(d),[],'clicking the existing hash reveals its target again');
+    assert.equal(d.getElementById('jump-again'),link);
+  }
+  assert.equal(hashChanges,0,'same-hash links need a click handler because hashchange does not fire');
+});
+
+test('floor navigation preserves the original-page action for newly loaded comments', async t => {
+  const { w, d, bottom } = await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul>`})});
+  bottom(); await pause(180);
+  const link=d.getElementById('11').querySelector('.nst-loaded-menu a');
+  assert.equal(link.textContent,'原页操作');
+  assert.equal(link.target,'_blank');
+  const click=new w.MouseEvent('click',{bubbles:true,cancelable:true,button:0});
+  link.dispatchEvent(click);
+  assert.equal(click.defaultPrevented,false,'the original-page action must open its native page in a new tab');
+  assert.equal(d.getElementById('11').classList.contains('nst-focus'),false,'opening the original page must not become an in-page jump');
+});
+
+test('floor navigation preserves explicit frame targets and download links', async t => {
+  const { w, d } = await setup(t,reply(1,'root'),{init:w=>{
+    w.document.getElementById('0').querySelector('article').insertAdjacentHTML('beforeend','<a id="frame-link" href="#1" target="reply-details">打开详情</a><a id="download-link" href="#1" download="reply.html">下载</a>');
+  }});
+  for(const id of ['frame-link','download-link']) {
+    const click=new w.MouseEvent('click',{bubbles:true,cancelable:true,button:0});
+    d.getElementById(id).dispatchEvent(click);
+    assert.equal(click.defaultPrevented,false,`${id} retains the action selected by its native attributes`);
+    assert.equal(d.getElementById('1').classList.contains('nst-focus'),false);
+  }
 });

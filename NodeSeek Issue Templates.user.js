@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.65
+// @version      1.4.66
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.65';
+  const VERSION = '1.4.66';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -3943,14 +3943,16 @@ function formValues(app) {
   }
 
   function scrollToRepliedFloor(floorId) {
-    const escapedFloor = CSS.escape(String(floorId));
-    const directTarget = document.querySelector(`#comment-${escapedFloor}, #floor-${escapedFloor}, [data-floor-id="${escapedFloor}"], [data-floor="${escapedFloor}"], [data-comment-floor="${escapedFloor}"]`);
+    if (!Number.isSafeInteger(floorId) || floorId < 1) return;
+    const escapedFloor = String(floorId);
+    const directTarget = document.querySelector(`ul.comments > li.content-item[id="${escapedFloor}"], #comment-${escapedFloor}, #floor-${escapedFloor}, [data-floor-id="${escapedFloor}"], [data-floor="${escapedFloor}"], [data-comment-floor="${escapedFloor}"]`);
     const floorLink = Array.from(document.querySelectorAll('a[href]')).find((link) => {
       const href = link.getAttribute('href') || '';
       return href === `#${floorId}` || href === `#comment-${floorId}` || href.includes(`floor_id=${floorId}`);
     });
     const target = directTarget || floorLink?.closest('.comment, [class*="comment"]') || floorLink;
     if (target) {
+      document.dispatchEvent(new CustomEvent('nsit:reveal-floor', { detail: { floor: floorId } }));
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
@@ -6940,24 +6942,36 @@ function installThreadedReading() {
     .nst-status { margin-inline-start:auto; opacity:.72; font-size:12px; }
     .nst-progress { flex-basis:100%; height:3px; border-radius:3px; overflow:hidden; background:#8882; }
     .nst-progress > span { display:block; height:100%; width:0; background:#3287be; }
-    ul.comments.nst-thread { position:relative; display:flex !important; flex-direction:column; overflow-anchor:none; }
-    ul.comments.nst-thread > li.content-item { order:1000000; min-width:0; box-sizing:border-box; position:relative; }
+    ul.comments.nst-thread { --nst-step:36px; --nst-avatar:32px; --nst-gap:12px; --nst-surface:var(--bg-main-color,#fff); position:relative; display:flex !important; flex-direction:column; padding-inline:0; overflow-anchor:none; }
+    body.dark-layout ul.comments.nst-thread { --nst-surface:var(--bg-main-color,#292929); }
+    ul.comments.nst-thread > li.content-item { order:1000000; min-width:0; box-sizing:border-box; position:relative; margin:0 !important; padding:12px 0 !important; border:0 !important; border-radius:0; background:transparent !important; }
+    ul.comments.nst-thread > li > .nsk-content-meta-info { display:flex; align-items:flex-start; gap:var(--nst-gap); margin:0 0 6px; }
+    ul.comments.nst-thread > li > .nsk-content-meta-info > .avatar-wrapper { flex:0 0 var(--nst-avatar); width:var(--nst-avatar); margin:0; }
+    ul.comments.nst-thread > li .avatar-normal { display:block; width:var(--nst-avatar) !important; height:var(--nst-avatar) !important; border-radius:50%; }
+    ul.comments.nst-thread > li > .nsk-content-meta-info > div:has(.author-info) { display:flex; align-items:center; flex-wrap:wrap; gap:3px 6px; min-width:0; flex:1; margin:0; }
+    ul.comments.nst-thread > li .author-info { line-height:1.5; }
+    ul.comments.nst-thread > li .author-name { font-size:13px; font-weight:600; }
+    ul.comments.nst-thread > li .content-info { margin:0; font-size:12px; }
+    ul.comments.nst-thread > li .nsit-author-info { order:1; flex-basis:100%; margin:0; }
+    ul.comments.nst-thread > li .floor-link-wrapper { margin-inline-start:auto; }
     ul.comments.nst-thread > li > .post-content,ul.comments.nst-thread > li > .comment-menu,
-    ul.comments.nst-thread > li > .nst-relation,ul.comments.nst-thread > li > .nst-auto-quote { margin-inline-start:50px; }
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) {
-      margin-block:0 !important; margin-inline-start:30px !important; padding:12px 12px 10px calc(12px + var(--nst-indent,0) * 22px) !important;
-      border-block:0 !important; background:color-mix(in srgb,currentColor 5%,transparent);
-    }
-    ul.comments.nst-thread > li[data-nst-first] { margin-top:7px !important; border-radius:9px 9px 0 0; }
-    ul.comments.nst-thread > li[data-nst-last] { margin-bottom:18px !important; border-radius:0 0 9px 9px; }
-    ul.comments.nst-thread > li[data-nst-first][data-nst-last] { border-radius:9px; }
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) .avatar-normal { width:28px !important; height:28px !important; }
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) .post-content { font-size:14px; line-height:1.7; overflow-wrap:anywhere; }
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) > .post-content,
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) > .comment-menu,
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) > .nst-relation,
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) > .nst-auto-quote { margin-inline-start:38px; }
-    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) .comment-menu { margin-top:7px; }
+    ul.comments.nst-thread > li > .signature,ul.comments.nst-thread > li > .topic-warning,
+    ul.comments.nst-thread > li > .nst-relation,ul.comments.nst-thread > li > .nst-auto-quote { margin-inline-start:calc(var(--nst-avatar) + var(--nst-gap)); }
+    ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) { margin-inline-start:calc((1 + var(--nst-indent,0)) * var(--nst-step)) !important; }
+    ul.comments.nst-thread > li > .post-content { margin-block:6px 10px; font-size:14px; line-height:1.7; overflow-wrap:anywhere; }
+    ul.comments.nst-thread > li > .comment-menu { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:14px; min-height:28px; margin-block:4px 0; }
+    ul.comments.nst-thread > li > .comment-menu > .menu-item { margin:0; }
+    ul.comments.nst-thread > li.nst-branch-hidden { display:none !important; }
+    .nst-branch-toggle { position:absolute; left:var(--nst-toggle-x,2px); top:var(--nst-toggle-y,auto); bottom:12px; z-index:2; display:flex; align-items:center; gap:8px; min-width:28px; height:28px; padding:0 5px; margin:0; border:0; border-radius:14px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+    .nst-branch-toggle svg { display:block; flex:none; width:18px; height:18px; overflow:visible; border-radius:50%; background:var(--nst-surface); }
+    .nst-branch-toggle svg circle,.nst-branch-toggle svg path { fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; }
+    .nst-branch-toggle[aria-expanded="true"] .nst-branch-plus { display:none; }
+    .nst-branch-toggle:hover { color:#3287be; background:color-mix(in srgb,currentColor 7%,transparent); }
+    .nst-branch-toggle:focus-visible { outline:2px solid #3287be; outline-offset:2px; }
+    .nst-branch-count { font-size:12px; line-height:1.5; }
+    .nst-branch-count[hidden] { display:none; }
+    .nst-branch-collapsed > .nst-branch-toggle { position:relative; left:auto; top:auto; bottom:auto; width:max-content; max-width:100%; margin:8px 0 0 var(--nst-toggle-x,2px); }
+    .nst-has-children::before { content:""; position:absolute; pointer-events:none; left:var(--nst-rail-x,16px); top:var(--nst-rail-top,47px); height:var(--nst-rail-height,0px); width:0; border-left:1.4px solid color-mix(in srgb,currentColor 20%,transparent); }
     .nst-relation { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin:4px 0 6px; font-size:12px; opacity:.8; }
     .nst-relation a { color:inherit; text-decoration:none; }
     .nst-relation a:hover { color:#3287be; text-decoration:underline; }
@@ -6991,7 +7005,8 @@ function installThreadedReading() {
     @media(max-width:600px) {
       .nst-modebar { gap:6px; padding:8px; }
       .nst-status { margin-inline-start:0; flex-basis:100%; }
-      ul.comments.nst-thread > li[data-nst-depth]:not([data-nst-depth="0"]) { margin-inline-start:12px !important; padding-inline-start:calc(8px + var(--nst-indent,0) * 12px) !important; padding-inline-end:8px !important; }
+      ul.comments.nst-thread { --nst-step:18px; --nst-avatar:28px; --nst-gap:8px; }
+      ul.comments.nst-thread > li > .comment-menu { gap:10px; }
     }
     @media(prefers-reduced-motion:reduce) { .nst-focus { animation:none !important; outline:2px solid #3287be; } }
   `;
@@ -7039,7 +7054,8 @@ function installThreadedReading() {
   function clearCard(card) {
     restoreStyle(card);
     ['nstDepth', 'nstFirst', 'nstLast'].forEach(key => delete card.dataset[key]);
-    card.querySelectorAll('.nst-relation,.nst-auto-quote').forEach(n => n.remove());
+    card.classList.remove('nst-branch-hidden','nst-branch-collapsed','nst-has-children');
+    card.querySelectorAll('.nst-relation,.nst-auto-quote,.nst-branch-toggle').forEach(n => n.remove());
     card.querySelectorAll('.nst-reply-prefix').forEach(n => n.classList.remove('nst-reply-prefix'));
   }
   function excerpt(body, limit = 600) {
@@ -7309,11 +7325,59 @@ function installThreadedReading() {
   function persist(s) {
     write(`page:${s.topic}:${s.page}`, { known:[...s.known].slice(-2000), pending:[...s.pending].slice(-2000) });
   }
+  function applyBranchState(s) {
+    for (const post of s.sorted) {
+      const parent = post.ref && s.posts.get(post.ref.parent);
+      post.folded = mode === 'thread' && s.collapsed.has(post.floor);
+      post.hidden = mode === 'thread' && !!parent && (parent.hidden || parent.folded);
+      post.card.classList.toggle('nst-branch-hidden', post.hidden);
+      post.card.classList.toggle('nst-branch-collapsed', post.folded && post.descendants > 0);
+      if (!post.toggle) continue;
+      post.toggle.setAttribute('aria-expanded', String(!post.folded));
+      const label = `${post.folded ? '展开' : '收起'} #${post.floor} 下的 ${post.descendants} 条回复`;
+      post.toggle.setAttribute('aria-label', label); post.toggle.title = label;
+      post.count.hidden = !post.folded;
+    }
+  }
+  function addBranchToggle(s, post) {
+    if (!post.descendants) return;
+    const button = el('button','nst-branch-toggle'); button.type = 'button';
+    // This constant icon contains no page content or remote markup.
+    button.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8"/><path d="M6.5 10h7"/><path class="nst-branch-plus" d="M10 6.5v7"/></svg>';
+    const count = el('span','nst-branch-count',`另外 ${post.descendants} 条回复`);
+    button.append(count); post.toggle = button; post.count = count;
+    post.card.classList.add('nst-has-children'); post.card.append(button);
+    button.addEventListener('click', () => {
+      if (state !== s || mode !== 'thread') return;
+      if (s.collapsed.has(post.floor)) s.collapsed.delete(post.floor);
+      else s.collapsed.add(post.floor);
+      applyBranchState(s);
+      updateFrame(false);
+    });
+  }
+  function revealFloor(floor) {
+    const s = state;
+    const post = s?.posts.get(Number(floor));
+    if (!post || mode !== 'thread') return false;
+    let parent = post.ref && s.posts.get(post.ref.parent), changed = false;
+    while (parent) {
+      if (s.collapsed.delete(parent.floor)) changed = true;
+      parent = parent.ref && s.posts.get(parent.ref.parent);
+    }
+    if (changed) { applyBranchState(s); updateFrame(false); }
+    return changed;
+  }
+  function revealHash() {
+    if (!/^#\d+$/.test(location.hash)) return;
+    const floor = Number(location.hash.slice(1));
+    if (revealFloor(floor)) state.posts.get(floor).card.scrollIntoView({ block:'center', behavior:'auto' });
+  }
   function anchor(s) {
-    return [...s.list.children].filter(n => n.matches('li.content-item')).sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+    return [...s.list.children].filter(n => n.matches('li.content-item:not(.nst-branch-hidden)')).sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
       .find(n => n.getBoundingClientRect().bottom > 100);
   }
   function jump(card) {
+    revealFloor(card.id);
     card.scrollIntoView({ block:'center', behavior:'auto' });
     card.classList.remove('nst-focus');
     void card.offsetWidth;
@@ -7451,19 +7515,36 @@ function installThreadedReading() {
     let svg = s.list.querySelector(':scope > .nst-connectors');
     if (mode !== 'thread') { svg?.remove(); return; }
     const box = s.list.getBoundingClientRect();
-    const paths = [];
-    for (const post of s.posts.values()) {
-      const parent = post.ref && s.posts.get(post.ref.parent);
-      if (!parent) continue;
-      const a = parent.card.querySelector('.avatar-wrapper img')?.getBoundingClientRect();
-      const b = post.card.querySelector('.avatar-wrapper img')?.getBoundingClientRect();
-      if (!a?.width || !b?.width || b.top <= a.top || !parent.card.getClientRects().length || !post.card.getClientRects().length) continue;
-      const startX = a.left - box.left + a.width / 2;
-      const endX = b.left - box.left - 4;
-      const startY = a.bottom - box.top + 3;
-      const endY = b.top - box.top + b.height / 2;
-      const lane = Math.min(startX, endX - 8);
-      paths.push(`M ${startX} ${startY} H ${lane} V ${endY - 7} Q ${lane} ${endY} ${lane + 7} ${endY} H ${endX}`);
+    const paths = [], geometry = new Map();
+    for (const post of s.sorted) {
+      if (post.hidden || !post.card.getClientRects().length) continue;
+      const a = post.card.querySelector('.avatar-wrapper img')?.getBoundingClientRect();
+      if (!a?.width) continue;
+      let startY = a.bottom - box.top + 3;
+      if (post.toggle) {
+        const cardBox = post.card.getBoundingClientRect();
+        const menuBox = post.card.querySelector('.comment-menu')?.getBoundingClientRect();
+        const x = a.left - cardBox.left + a.width / 2;
+        const y = menuBox?.height ? menuBox.top - cardBox.top + menuBox.height / 2 - 14 : cardBox.height - 40;
+        const values = { '--nst-toggle-x':x - 14, '--nst-toggle-y':Math.max(a.bottom - cardBox.top + 3,y), '--nst-rail-x':x, '--nst-rail-top':a.bottom - cardBox.top + 3 };
+        for (const [key,value] of Object.entries(values)) post.card.style.setProperty(key,`${value}px`);
+        const toggleBox = post.toggle.getBoundingClientRect();
+        startY = toggleBox.top - box.top + toggleBox.height / 2;
+        post.card.style.setProperty('--nst-rail-height',`${Math.max(0,startY - (a.bottom - box.top + 3))}px`);
+      }
+      geometry.set(post.floor,{avatar:a,startY});
+    }
+    for (const parent of s.sorted) {
+      const own = geometry.get(parent.floor);
+      if (!own || parent.folded) continue;
+      const children = (s.children.get(parent.floor) || []).map(post => geometry.get(post.floor)?.avatar).filter(a => a && a.top > own.avatar.top);
+      if (!children.length) continue;
+      const startX = own.avatar.left - box.left + own.avatar.width / 2;
+      const lane = Math.min(startX,...children.map(a => a.left - box.left - 14));
+      const ends = children.map(a => ({x:a.left - box.left - 4,y:a.top - box.top + a.height / 2}));
+      const lastY = Math.max(...ends.map(end => end.y));
+      // One spine per parent avoids darkening shared segments for every sibling.
+      paths.push(`M ${startX} ${own.startY} H ${lane} V ${lastY - 10} ` + ends.map(end => `M ${lane} ${end.y - 10} Q ${lane} ${end.y} ${lane + 10} ${end.y} H ${end.x}`).join(' '));
     }
     if (!paths.length) { svg?.remove(); return; }
     // Read-only previews never inject remote HTML. Only numeric SVG paths are generated here.
@@ -7490,7 +7571,7 @@ function installThreadedReading() {
     if (markRead && !document.hidden) {
       let changed = false;
       for (const post of s.posts.values()) {
-        if (!s.pending.has(post.floor)) continue;
+        if (!s.pending.has(post.floor) || post.hidden) continue;
         const rect = post.card.getBoundingClientRect();
         if (rect.height && rect.top >= 70 && rect.bottom <= window.innerHeight - (s.editorHeight || 0)) {
           s.pending.delete(post.floor); post.card.classList.remove('nst-new'); changed = true;
@@ -7535,7 +7616,7 @@ function installThreadedReading() {
       if (state && (state.topic !== current.topic || state.page !== current.page || state.list !== list)) cleanup();
       if (!state) {
         const stored = read(`page:${current.topic}:${current.page}`, null);
-        state = { ...current, list, posts:new Map(), known:new Set(Array.isArray(stored?.known) ? stored.known.filter(Number.isSafeInteger) : []), pending:new Set(Array.isArray(stored?.pending) ? stored.pending.filter(Number.isSafeInteger) : []), visited:Array.isArray(stored?.known), maxPage:current.page };
+        state = { ...current, list, posts:new Map(), collapsed:new Set(), known:new Set(Array.isArray(stored?.known) ? stored.known.filter(Number.isSafeInteger) : []), pending:new Set(Array.isArray(stored?.pending) ? stored.pending.filter(Number.isSafeInteger) : []), visited:Array.isArray(stored?.known), maxPage:current.page };
         makeBar(state); setupLoading(state); resize?.observe(list);
       }
       const s = state;
@@ -7550,7 +7631,7 @@ function installThreadedReading() {
         clearCard(card);
         const floor = Number(card.id);
         const body = card.querySelector('article.post-content');
-        const post = { floor, card, body, author:card.querySelector('.author-name')?.textContent.trim() || '', ref:null, depth:0, root:floor };
+        const post = { floor, card, body, author:card.querySelector('.author-name')?.textContent.trim() || '', ref:null, depth:0, root:floor, descendants:0 };
         s.posts.set(floor, post);
         if (s.visited && !s.known.has(floor)) s.pending.add(floor);
         s.known.add(floor); card.classList.toggle('nst-new', s.pending.has(floor));
@@ -7566,6 +7647,11 @@ function installThreadedReading() {
         if (!children.has(key)) children.set(key, []);
         children.get(key).push(post);
       }
+      s.sorted = sorted; s.children = children;
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const post = sorted[i], parent = post.ref && s.posts.get(post.ref.parent);
+        if (parent) parent.descendants += 1 + post.descendants;
+      }
       list.classList.toggle('nst-thread', mode === 'thread');
       let rank = 1;
       const stack = [...(children.get(0) || [])].reverse();
@@ -7577,6 +7663,7 @@ function installThreadedReading() {
           if (mode === 'thread') {
             post.card.style.order = String(rank++);
             post.card.style.setProperty('--nst-indent',String(Math.min(4,Math.max(0,post.depth - 1))));
+            addBranchToggle(s,post);
           }
           addRelation(s,post,post.ref && (post.ref.parent === 0 ? s.op : s.posts.get(post.ref.parent)));
         }
@@ -7589,6 +7676,7 @@ function installThreadedReading() {
       if (mode === 'thread') for (const group of groups.values()) {
         group[0].dataset.nstFirst = ''; group[group.length - 1].dataset.nstLast = '';
       }
+      applyBranchState(s);
       s.bar.querySelectorAll('[data-nst-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.nstMode === mode)));
       document.querySelectorAll('[aria-label="pagination"] a[href]').forEach(a => {
         const m = a.getAttribute('href').match(new RegExp(`^/post-${s.topic}-(\\d+)`));
@@ -7608,7 +7696,7 @@ function installThreadedReading() {
   const observer = new MutationObserver(records => {
     if (records.some(record => {
       const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
-      const owned = '.nst-modebar,.nst-relation,.nst-auto-quote,.nst-connectors,.nst-auto-load,.nst-fixed-editor,.nst-editor-spacer,.nst-editor-head';
+      const owned = '.nst-modebar,.nst-relation,.nst-auto-quote,.nst-branch-toggle,.nst-connectors,.nst-auto-load,.nst-fixed-editor,.nst-editor-spacer,.nst-editor-head';
       if (target?.closest(owned)) return false;
       const changed = [...record.addedNodes,...record.removedNodes];
       // Inserting a preview targets its native parent card, not the preview itself.
@@ -7624,12 +7712,26 @@ function installThreadedReading() {
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
+  document.addEventListener('nsit:reveal-floor', event => revealFloor(event.detail?.floor));
   document.addEventListener('click', event => {
     const action=event.target.closest?.('.comment-menu .menu-item,.comment-menu button');
     if(action && /^(回复|引用|编辑)$/.test(action.textContent.trim())) openEditor(state,true);
+    if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest?.('a[href]');
+    if (link && state && (!link.target || link.target.toLowerCase() === '_self') && !link.hasAttribute('download')) {
+      try {
+        const url = new URL(link.href,location.href);
+        const target = url.pathname.match(/^\/post-(\d+)-(\d+)\/?$/);
+        const floor = /^#\d+$/.test(url.hash) ? Number(url.hash.slice(1)) : 0;
+        if (url.origin === location.origin && target?.[1] === state.topic && state.posts.has(floor)) {
+          event.preventDefault(); jump(state.posts.get(floor).card);
+        }
+      } catch { /* Non-URL links retain their native behavior. */ }
+    }
   },true);
   document.addEventListener('load',event => { if (event.target.tagName === 'IMG') scheduleFrame(); },true);
   window.addEventListener('popstate',schedule);
+  window.addEventListener('hashchange',revealHash);
   window.addEventListener('pageshow',schedule);
   window.addEventListener('pagehide',() => { if (state) persist(state); });
   if (typeof GM_registerMenuCommand === 'function') {

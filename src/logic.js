@@ -2927,14 +2927,16 @@
   }
 
   function scrollToRepliedFloor(floorId) {
-    const escapedFloor = CSS.escape(String(floorId));
-    const directTarget = document.querySelector(`#comment-${escapedFloor}, #floor-${escapedFloor}, [data-floor-id="${escapedFloor}"], [data-floor="${escapedFloor}"], [data-comment-floor="${escapedFloor}"]`);
+    if (!Number.isSafeInteger(floorId) || floorId < 1) return;
+    const escapedFloor = String(floorId);
+    const directTarget = document.querySelector(`ul.comments > li.content-item[id="${escapedFloor}"], #comment-${escapedFloor}, #floor-${escapedFloor}, [data-floor-id="${escapedFloor}"], [data-floor="${escapedFloor}"], [data-comment-floor="${escapedFloor}"]`);
     const floorLink = Array.from(document.querySelectorAll('a[href]')).find((link) => {
       const href = link.getAttribute('href') || '';
       return href === `#${floorId}` || href === `#comment-${floorId}` || href.includes(`floor_id=${floorId}`);
     });
     const target = directTarget || floorLink?.closest('.comment, [class*="comment"]') || floorLink;
     if (target) {
+      document.dispatchEvent(new CustomEvent('nsit:reveal-floor', { detail: { floor: floorId } }));
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
