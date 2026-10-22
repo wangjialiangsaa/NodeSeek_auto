@@ -136,6 +136,7 @@
     renderRepliedPostMenu();
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
+    ensureAutomaticTaskTrigger();
     filterPostListItems();
   }
 
@@ -2840,32 +2841,23 @@
     renderPostFilterPanel();
   }
 
-  function ensurePostFilterTrigger() {
-    if (!featureEnabled('postFilter')) {
-      document.querySelectorAll('[data-nsit-post-filter-entry],[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
-      return;
-    }
-    const iconPath = '<path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>';
+  function ensureStatSettingsTrigger(column, name, title, iconPath, open) {
     const icon = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">${iconPath}</svg>`;
-    document.querySelectorAll('[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
-    document.querySelectorAll('[data-nsit-post-filter-trigger]').forEach(node => {
-      if (!node.closest('[data-nsit-post-filter-entry]')) node.remove();
-    });
-    const block = document.querySelector('#nsk-right-panel-container .user-stat > .stat-block,.nsk-right-panel-container .user-stat > .stat-block');
+    const block = document.querySelectorAll('#nsk-right-panel-container .user-stat > .stat-block,.nsk-right-panel-container .user-stat > .stat-block')[column];
     if (!block) return;
-    let entry = block.querySelector(':scope > [data-nsit-post-filter-entry]');
+    let entry = block.querySelector(`:scope > [data-${name}-entry]`);
     if (!entry) {
-      const template = Array.from(block.children).find(node => !node.hasAttribute('data-nsit-lucky-notify') && node.querySelector('a'));
+      const template = Array.from(block.children).find(node => !node.matches('[data-nsit-lucky-notify],[data-nsit-post-filter-entry],[data-nsit-automation-entry]') && node.querySelector('a'));
       const nativeLink = template?.querySelector('a');
       if (!nativeLink) return;
       // Copy the native row, icon and label's Vue scope attributes to inherit
       // the same typography and two-column spacing as the site's statistics.
       entry = template.cloneNode(false); entry.removeAttribute('id');
-      entry.dataset.nsitPostFilterEntry = '';
+      entry.setAttribute(`data-${name}-entry`, '');
       const trigger = nativeLink.cloneNode(false);
       trigger.removeAttribute('id'); trigger.href = '#';
-      trigger.classList.add('nsit-post-filter-stat-trigger'); trigger.dataset.nsitPostFilterTrigger = '';
-      trigger.title = '过滤'; trigger.setAttribute('aria-label', '过滤'); trigger.setAttribute('role', 'button');
+      trigger.classList.add(`${name}-stat-trigger`); trigger.setAttribute(`data-${name}-trigger`, '');
+      trigger.title = title; trigger.setAttribute('aria-label', title); trigger.setAttribute('role', 'button');
       const nativeIcon = nativeLink.querySelector('svg');
       if (nativeIcon) {
         const svg = nativeIcon.cloneNode(false);
@@ -2874,12 +2866,25 @@
         trigger.append(svg);
       } else trigger.innerHTML = icon;
       const label = nativeLink.querySelector('span')?.cloneNode(false) || document.createElement('span');
-      label.textContent = '过滤'; trigger.append(document.createTextNode(' '), label);
-      trigger.addEventListener('click', event => { event.preventDefault(); openPostFilterPanel('block'); });
+      label.textContent = title; trigger.append(document.createTextNode(' '), label);
+      trigger.addEventListener('click', event => { event.preventDefault(); open(); });
       trigger.addEventListener('keydown', event => { if (event.key === ' ') { event.preventDefault(); trigger.click(); } });
       entry.append(trigger);
     }
     if (entry !== block.lastElementChild) block.append(entry);
+  }
+
+  function ensurePostFilterTrigger() {
+    if (!featureEnabled('postFilter')) {
+      document.querySelectorAll('[data-nsit-post-filter-entry],[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
+      return;
+    }
+    document.querySelectorAll('[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
+    document.querySelectorAll('[data-nsit-post-filter-trigger]').forEach(node => {
+      if (!node.closest('[data-nsit-post-filter-entry]')) node.remove();
+    });
+    const iconPath = '<path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>';
+    ensureStatSettingsTrigger(0, 'nsit-post-filter', '过滤', iconPath, () => openPostFilterPanel('block'));
   }
 
   function installPostFilters() {

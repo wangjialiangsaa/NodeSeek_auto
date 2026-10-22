@@ -624,6 +624,7 @@
     renderRepliedPostMenu();
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
+    ensureAutomaticTaskTrigger();
     filterPostListItems();
     renderTradeStatusActions();
   });
@@ -643,6 +644,7 @@
   runLuckyAnnounceFromUrl();
   initialize();
   installPostFilters();
+  ensureAutomaticTaskTrigger();
   renderRepliedPostMenu();
   renderRepliedPostLabels();
   installTradeStatusActions();

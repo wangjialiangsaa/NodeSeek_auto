@@ -30,6 +30,11 @@
     }
   }
 
+  function ensureAutomaticTaskTrigger() {
+    const iconPath = '<path d="m28 3 1.5 5.5 5 3 5.5-1.5 4 7-4 4v6l4 4-4 7-5.5-1.5-5 3L28 45h-8l-1.5-5.5-5-3L8 38l-4-7 4-4v-6l-4-4 4-7 5.5 1.5 5-3L20 3Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><circle cx="24" cy="24" r="7" stroke="currentColor" stroke-width="4"/>';
+    ensureStatSettingsTrigger(1, 'nsit-automation', '自动化', iconPath, openAutomaticTaskSettings);
+  }
+
   function openAutomaticTaskSettings() {
     let dialog = document.querySelector('[data-nsit-auto-dialog]');
     if (!dialog) {

@@ -8,6 +8,7 @@ const card=(floor,body)=>`<li class="content-item" id="${floor}" data-comment-id
 async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,flags={}}={}) {
   const dom=new JSDOM(`<html><head></head><body><header id="nsk-head"></header><main><ul class="comments">${card(1,'root')}${card(2,'<p><a href="/member?t=User1">@User1</a> <a href="/post-123-1#1">#1</a><br>child</p>')}</ul><div class="post-bottom-pager"><nav aria-label="pagination"><a rel="next" href="/post-123-2">下一页</a></nav></div><div id="editor"><div class="md-editor"><div id="editor-body"><div class="window_header"><a href="https://www.runoob.com/markdown/md-tutorial.html">Markdown</a></div><div class="CodeMirror"></div></div><div class="topic-select"><button class="submit">发布评论</button></div></div></div></main></body></html>`,{url,runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,d=w.document,menus=new Map(),intersections=[];
+  d.body.insertAdjacentHTML('afterbegin','<aside id="nsk-right-panel-container"><div class="user-stat"><div class="stat-block"><div data-v-native><a data-v-native href="/progress"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>等级 Lv 5</span></a></div></div><div class="stat-block"><div data-v-native><a data-v-native href="/my-post"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>主题帖 153</span></a></div></div></div></aside>');
   const observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver{constructor(callback){super(callback);observers.push(this);}};
   t.after(()=>{observers.forEach(o=>o.disconnect());w.close();});
@@ -42,7 +43,12 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     assert.ok(tools);assert.equal(panel.hidden,true);
     assert.ok(panel.contains(d.querySelector('.nsit-image-trigger')));
     tools.click();assert.equal(panel.hidden,false);
-    panel.querySelector('.nsit-auto-open').click();assert.equal(panel.hidden,true);
+    assert.equal(panel.querySelector('.nsit-auto-open'),null);
+    d.body.click();assert.equal(panel.hidden,true);
+    const automation=d.querySelector('[data-nsit-automation-trigger]');assert.ok(automation);
+    assert.equal(automation.textContent.trim(),'自动化');
+    assert.ok(d.querySelectorAll('.user-stat > .stat-block')[1].contains(automation));
+    automation.click();
     const taskDialog=d.querySelector('[data-nsit-auto-dialog]');assert.equal(taskDialog.hidden,false);
     assert.equal(taskDialog.querySelector('[name="replyText"]').value,'');
     assert.equal(taskDialog.querySelector('[name="autoReply"]').checked,false);
