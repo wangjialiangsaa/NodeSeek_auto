@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.59
+// @version      1.4.60
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.59';
+  const VERSION = '1.4.60';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -44,7 +44,7 @@ const APP_ID = 'nsit-app';
     ['luckyNotify', '抽奖与中奖通知', '个人统计里的「抽奖 / 中奖」入口，以及帖子的开奖公告按钮'],
     ['tradeStatus', '交易状态', '帖子页 #0 楼旁的「已出 / 已收」按钮'],
     ['repliedPosts', '我的回复', '帖子页和列表页的回复楼层标记'],
-    ['postFilter', '关键字过滤', '顶部和个人栏的关键词屏蔽 / 高亮设置入口'],
+    ['postFilter', '过滤', '个人信息统计栏里的关键词屏蔽 / 高亮设置入口'],
     ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
   ];
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));
@@ -3781,7 +3781,7 @@ function formValues(app) {
       <div class="nsit-filter-form-actions"><button type="button" data-nsit-filter-action="cancel-edit">取消</button><button type="submit">${editing ? '保存条件' : '添加条件'}</button></div>
     </form>` : '';
     const list = visible.length ? visible.map((rule) => `<li class="${rule.enabled ? '' : 'is-disabled'}" data-nsit-filter-search-text="${escapeHtml(`${rule.keywords} ${rule.author} ${postFilterRuleSummary(rule)}`.toLocaleLowerCase())}"><span class="nsit-filter-rule-color" style="background:${escapeHtml(rule.action === 'highlight' ? rule.color : rule.action === 'hide' ? '#d85b5b' : '#d89b32')}"></span><div class="nsit-filter-rule-copy"><strong>${escapeHtml(postFilterRuleTitle(rule))}</strong><small>${escapeHtml(postFilterRuleDetail(rule))}</small></div><span class="nsit-filter-rule-tools"><label class="nsit-filter-switch" title="${rule.enabled ? '禁用条件' : '启用条件'}"><input type="checkbox" data-nsit-filter-toggle="${escapeHtml(rule.id)}"${rule.enabled ? ' checked' : ''}><i></i></label><span class="nsit-filter-rule-actions"><button type="button" data-nsit-filter-action="edit" data-rule-id="${escapeHtml(rule.id)}">编辑</button><button type="button" data-nsit-filter-action="delete" data-rule-id="${escapeHtml(rule.id)}">删除</button></span></span></li>`).join('') : '<li class="nsit-filter-empty">还没有符合条件的规则。</li>';
-    panel.innerHTML = `<div class="nsit-filter-panel-head"><strong>内容与用户过滤</strong><button type="button" data-nsit-filter-action="close" aria-label="关闭">×</button></div><div class="nsit-filter-toolbar"><input type="search" data-nsit-filter-search value="${escapeHtml(state.query)}" placeholder="搜索过滤条件"><button type="button" data-nsit-filter-action="new">＋ 新增</button></div><div class="nsit-filter-tabs"><button type="button" data-nsit-filter-tab="block" class="${state.tab === 'block' ? 'is-active' : ''}">🚫 屏蔽</button><button type="button" data-nsit-filter-tab="highlight" class="${state.tab === 'highlight' ? 'is-active' : ''}">🎨 高亮</button><button type="button" class="nsit-filter-clear" data-nsit-filter-action="clear">清空当前组</button></div>${form}<ul class="nsit-filter-rule-list">${list}</ul>`;
+    panel.innerHTML = `<div class="nsit-filter-panel-head"><strong>过滤</strong><button type="button" data-nsit-filter-action="close" aria-label="关闭">×</button></div><div class="nsit-filter-toolbar"><input type="search" data-nsit-filter-search value="${escapeHtml(state.query)}" placeholder="搜索过滤条件"><button type="button" data-nsit-filter-action="new">＋ 新增</button></div><div class="nsit-filter-tabs"><button type="button" data-nsit-filter-tab="block" class="${state.tab === 'block' ? 'is-active' : ''}">🚫 屏蔽</button><button type="button" data-nsit-filter-tab="highlight" class="${state.tab === 'highlight' ? 'is-active' : ''}">🎨 高亮</button><button type="button" class="nsit-filter-clear" data-nsit-filter-action="clear">清空当前组</button></div>${form}<ul class="nsit-filter-rule-list">${list}</ul>`;
     panel._nsitPostFilterState = state;
     filterPostFilterRuleList(panel);
   }
@@ -3857,55 +3857,50 @@ function formValues(app) {
 
   function ensurePostFilterTrigger() {
     if (!featureEnabled('postFilter')) {
-      document.querySelectorAll('[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
+      document.querySelectorAll('[data-nsit-post-filter-entry],[data-nsit-post-filter-trigger],[data-nsit-post-filter-panel],[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
       return;
     }
     const iconPath = '<path d="M6 9L20.4 25.8178V38.4444L27.6 42V25.8178L42 9H6Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>';
     const icon = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">${iconPath}</svg>`;
-    const head = document.querySelector('#nsk-head');
-    if (head && !head.querySelector('[data-nsit-post-filter-trigger]')) {
-      let group = head.querySelector('[data-nsit-post-filter-icon-group]');
-      if (!group) {
-        group = document.createElement('div');
-        group.className = 'right-button-group';
-        group.dataset.nsitPostFilterIconGroup = '';
-        const anchor = head.querySelector('.color-theme-switcher, .search-box');
-        if (anchor?.parentElement === head) head.insertBefore(group, anchor);
-        else head.append(group);
-      }
-      const trigger = document.createElement('button');
-      trigger.type = 'button'; trigger.className = 'nsit-post-filter-trigger'; trigger.dataset.nsitPostFilterTrigger = '';
-      trigger.title = '关键字过滤管理'; trigger.setAttribute('aria-label', trigger.title);
-      trigger.innerHTML = icon;
-      trigger.addEventListener('click', openPostFilterPanel);
-      group.append(trigger);
-    }
-    const settings = document.querySelector('#nsk-right-panel-container .menu a[href="/setting"],.nsk-right-panel-container .menu a[href="/setting"]');
-    const row = settings?.parentElement;
-    if (row && !row.querySelector('[data-nsit-post-filter-trigger]')) {
-      // Keep the site's scoped attributes and native icon class so this entry
-      // follows the same size, spacing, theme and hover styles as its neighbours.
-      const trigger = settings.cloneNode(false);
+    document.querySelectorAll('[data-nsit-post-filter-icon-group]').forEach(node => node.remove());
+    document.querySelectorAll('[data-nsit-post-filter-trigger]').forEach(node => {
+      if (!node.closest('[data-nsit-post-filter-entry]')) node.remove();
+    });
+    const block = document.querySelector('#nsk-right-panel-container .user-stat > .stat-block,.nsk-right-panel-container .user-stat > .stat-block');
+    if (!block) return;
+    let entry = block.querySelector(':scope > [data-nsit-post-filter-entry]');
+    if (!entry) {
+      const template = Array.from(block.children).find(node => !node.hasAttribute('data-nsit-lucky-notify') && node.querySelector('a'));
+      const nativeLink = template?.querySelector('a');
+      if (!nativeLink) return;
+      // Copy the native row, icon and label's Vue scope attributes to inherit
+      // the same typography and two-column spacing as the site's statistics.
+      entry = template.cloneNode(false); entry.removeAttribute('id');
+      entry.dataset.nsitPostFilterEntry = '';
+      const trigger = nativeLink.cloneNode(false);
       trigger.removeAttribute('id'); trigger.href = '#';
-      trigger.classList.add('nsit-post-filter-account-trigger'); trigger.dataset.nsitPostFilterTrigger = '';
-      trigger.title = '屏蔽关键词设置'; trigger.setAttribute('aria-label', trigger.title); trigger.setAttribute('role', 'button');
-      const nativeIcon = settings.querySelector('svg');
+      trigger.classList.add('nsit-post-filter-stat-trigger'); trigger.dataset.nsitPostFilterTrigger = '';
+      trigger.title = '过滤'; trigger.setAttribute('aria-label', '过滤'); trigger.setAttribute('role', 'button');
+      const nativeIcon = nativeLink.querySelector('svg');
       if (nativeIcon) {
         const svg = nativeIcon.cloneNode(false);
         svg.setAttribute('viewBox', '0 0 48 48'); svg.setAttribute('fill', 'none'); svg.setAttribute('aria-hidden', 'true');
         svg.innerHTML = iconPath;
         trigger.append(svg);
       } else trigger.innerHTML = icon;
+      const label = nativeLink.querySelector('span')?.cloneNode(false) || document.createElement('span');
+      label.textContent = '过滤'; trigger.append(document.createTextNode(' '), label);
       trigger.addEventListener('click', event => { event.preventDefault(); openPostFilterPanel('block'); });
       trigger.addEventListener('keydown', event => { if (event.key === ' ') { event.preventDefault(); trigger.click(); } });
-      settings.after(document.createTextNode(' '), trigger);
+      entry.append(trigger);
     }
+    if (entry !== block.lastElementChild) block.append(entry);
   }
 
   function installPostFilters() {
     if (window[POST_FILTER_RUNTIME_KEY]) return;
     window[POST_FILTER_RUNTIME_KEY] = true;
-    GM_addStyle('#nsk-head [data-nsit-post-filter-icon-group]{display:flex;align-items:center;gap:0;border-left:1px solid var(--border-color,var(--nsit-line-2));margin-left:6px;padding-left:6px;height:30px}.nsit-post-filter-trigger{display:inline-grid;place-items:center;width:30px;height:30px;margin:0;padding:0 6px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer}.nsit-post-filter-trigger:hover{background:var(--nsit-hover)}.nsit-post-filter-trigger svg{width:17px;height:17px}.post-list-item.nsit-filter-hidden{display:none!important}.post-list-item.nsit-filter-highlighted{background:var(--nsit-filter-highlight)!important}body.dark-layout .post-list-item.nsit-filter-highlighted{background:linear-gradient(var(--nsit-hl-veil),var(--nsit-hl-veil)),var(--nsit-filter-highlight)!important}.nsit-post-filter-panel{position:fixed;z-index:2147483647;top:62px;right:18px;display:none;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto;border:1px solid var(--nsit-line-strong);border-radius:10px;background:var(--nsit-surface);color:var(--nsit-ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 16px 42px var(--nsit-shadow)}.nsit-post-filter-panel.is-open{display:block}.nsit-filter-panel-head,.nsit-filter-toolbar,.nsit-filter-tabs,.nsit-filter-form-actions{display:flex;align-items:center;gap:8px}.nsit-filter-panel-head{box-sizing:border-box;height:48px;margin:0;padding:8px 14px;border:0;border-bottom:1px solid var(--nsit-line);background:var(--nsit-surface)}.nsit-filter-panel-head strong{font-size:16px;line-height:1.2}.nsit-filter-panel-head button{display:grid;place-items:center;flex:none;width:28px;height:28px;margin:0 0 0 auto;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;color:var(--nsit-dim)!important;font:22px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;cursor:pointer}.nsit-filter-panel-head button:hover{background:var(--nsit-hover-bg)!important;color:var(--nsit-ink)!important}.nsit-filter-toolbar{padding:12px 14px 8px}.nsit-filter-toolbar input{min-width:0;flex:1}.nsit-post-filter-panel input,.nsit-post-filter-panel select{box-sizing:border-box;width:100%;border:1px solid var(--nsit-line-strong);border-radius:6px;padding:7px 8px;background:var(--nsit-surface);color:inherit;font:inherit}.nsit-post-filter-panel button{border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-surface);color:var(--nsit-ink-soft-2);padding:6px 9px;font:inherit;cursor:pointer}.nsit-filter-tabs{padding:0 14px 10px;border-bottom:1px solid var(--nsit-line)}.nsit-filter-clear{margin-left:auto!important;border-color:var(--nsit-danger-line-2)!important;background:var(--nsit-danger-soft-2)!important;color:var(--nsit-danger-deep)!important}.nsit-filter-tabs .is-active{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-filter-rule-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0;padding:14px;border:0;border-bottom:1px solid var(--nsit-line);background:var(--nsit-sunken)}.nsit-filter-rule-form label{display:grid;gap:4px;color:var(--nsit-ink-soft);font-size:12px}.nsit-filter-keywords{display:grid;grid-column:1/-1;grid-template-columns:minmax(0,1fr) auto;gap:9px}.nsit-filter-keywords>label,.nsit-filter-keyword-mode{display:grid;gap:4px;color:var(--nsit-ink-soft);font-size:12px}.nsit-filter-keyword-mode>span:first-child{line-height:1.45}.nsit-filter-keyword-mode>[role="group"]{display:flex;align-items:center;gap:8px;min-height:34px}.nsit-filter-keyword-mode label{display:flex;align-items:center;gap:3px;color:var(--nsit-ink-soft);cursor:pointer}.nsit-filter-keyword-mode input{width:15px;height:15px;margin:0;padding:0;accent-color:var(--nsit-info)}.nsit-filter-rule-form .nsit-filter-form-actions{grid-column:1/-1}.nsit-filter-rule-form input[type="color"]{height:34px;padding:3px}.nsit-filter-color-field.is-hidden{display:none}.nsit-filter-form-actions{justify-content:flex-end;margin:5px -14px -14px;padding:12px 14px;border-top:1px solid var(--nsit-line);background:var(--nsit-surface)}.nsit-filter-form-actions button:last-child{border-color:var(--nsit-info);background:var(--nsit-info);color:var(--nsit-on-info)}.nsit-filter-rule-list{display:grid;gap:0;margin:0;padding:0;list-style:none}.nsit-filter-rule-list li{display:grid;grid-template-columns:9px minmax(0,1fr) auto;align-items:center;column-gap:14px;margin:0;padding:8px 14px;border-bottom:1px solid var(--nsit-line-soft-2)}.nsit-filter-rule-list li[hidden]{display:none}.nsit-filter-rule-list li.is-disabled{opacity:.5}.nsit-filter-rule-copy{display:grid;gap:1px;min-width:0}.nsit-filter-rule-list strong,.nsit-filter-rule-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nsit-filter-rule-list strong{line-height:20px}.nsit-filter-rule-list small{color:var(--nsit-muted);font-size:12px;line-height:17px}.nsit-filter-rule-color{width:9px;height:30px;border-radius:99px}.nsit-filter-rule-tools{display:flex;align-items:center;gap:9px;height:28px;white-space:nowrap}.nsit-filter-switch{position:relative;display:block;flex:none;width:30px;height:18px;cursor:pointer}.nsit-filter-switch input{position:absolute;opacity:0}.nsit-filter-switch i{display:block;width:30px;height:18px;border-radius:99px;background:var(--nsit-knob-off)}.nsit-filter-switch i::after{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--nsit-switch-knob);content:"";transition:transform .15s}.nsit-filter-switch input:checked+i{background:var(--nsit-switch-on)}.nsit-filter-switch input:checked+i::after{transform:translateX(12px)}.nsit-filter-rule-actions{display:flex;align-items:center;gap:2px;height:28px;white-space:nowrap}.nsit-filter-rule-actions button{display:inline-flex;align-items:center;height:28px;margin:0;padding:0 4px;border:0;background:transparent;color:var(--nsit-info);font-size:12px;line-height:1}.nsit-filter-rule-actions button:hover{background:transparent;color:var(--nsit-info-ink-2);text-decoration:underline}.nsit-filter-rule-actions button[data-nsit-filter-action="delete"]{color:var(--nsit-danger-ink-2)}.nsit-filter-rule-actions button[data-nsit-filter-action="delete"]:hover{color:var(--nsit-danger-ink-3)}.nsit-filter-empty{margin:0;padding:22px 14px;color:var(--nsit-muted);text-align:center}');
+    GM_addStyle('.post-list-item.nsit-filter-hidden{display:none!important}.post-list-item.nsit-filter-highlighted{background:var(--nsit-filter-highlight)!important}body.dark-layout .post-list-item.nsit-filter-highlighted{background:linear-gradient(var(--nsit-hl-veil),var(--nsit-hl-veil)),var(--nsit-filter-highlight)!important}.nsit-post-filter-panel{position:fixed;z-index:2147483647;top:62px;right:18px;display:none;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto;border:1px solid var(--nsit-line-strong);border-radius:10px;background:var(--nsit-surface);color:var(--nsit-ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 16px 42px var(--nsit-shadow)}.nsit-post-filter-panel.is-open{display:block}.nsit-filter-panel-head,.nsit-filter-toolbar,.nsit-filter-tabs,.nsit-filter-form-actions{display:flex;align-items:center;gap:8px}.nsit-filter-panel-head{box-sizing:border-box;height:48px;margin:0;padding:8px 14px;border:0;border-bottom:1px solid var(--nsit-line);background:var(--nsit-surface)}.nsit-filter-panel-head strong{font-size:16px;line-height:1.2}.nsit-filter-panel-head button{display:grid;place-items:center;flex:none;width:28px;height:28px;margin:0 0 0 auto;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;color:var(--nsit-dim)!important;font:22px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;cursor:pointer}.nsit-filter-panel-head button:hover{background:var(--nsit-hover-bg)!important;color:var(--nsit-ink)!important}.nsit-filter-toolbar{padding:12px 14px 8px}.nsit-filter-toolbar input{min-width:0;flex:1}.nsit-post-filter-panel input,.nsit-post-filter-panel select{box-sizing:border-box;width:100%;border:1px solid var(--nsit-line-strong);border-radius:6px;padding:7px 8px;background:var(--nsit-surface);color:inherit;font:inherit}.nsit-post-filter-panel button{border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-surface);color:var(--nsit-ink-soft-2);padding:6px 9px;font:inherit;cursor:pointer}.nsit-filter-tabs{padding:0 14px 10px;border-bottom:1px solid var(--nsit-line)}.nsit-filter-clear{margin-left:auto!important;border-color:var(--nsit-danger-line-2)!important;background:var(--nsit-danger-soft-2)!important;color:var(--nsit-danger-deep)!important}.nsit-filter-tabs .is-active{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-filter-rule-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0;padding:14px;border:0;border-bottom:1px solid var(--nsit-line);background:var(--nsit-sunken)}.nsit-filter-rule-form label{display:grid;gap:4px;color:var(--nsit-ink-soft);font-size:12px}.nsit-filter-keywords{display:grid;grid-column:1/-1;grid-template-columns:minmax(0,1fr) auto;gap:9px}.nsit-filter-keywords>label,.nsit-filter-keyword-mode{display:grid;gap:4px;color:var(--nsit-ink-soft);font-size:12px}.nsit-filter-keyword-mode>span:first-child{line-height:1.45}.nsit-filter-keyword-mode>[role="group"]{display:flex;align-items:center;gap:8px;min-height:34px}.nsit-filter-keyword-mode label{display:flex;align-items:center;gap:3px;color:var(--nsit-ink-soft);cursor:pointer}.nsit-filter-keyword-mode input{width:15px;height:15px;margin:0;padding:0;accent-color:var(--nsit-info)}.nsit-filter-rule-form .nsit-filter-form-actions{grid-column:1/-1}.nsit-filter-rule-form input[type="color"]{height:34px;padding:3px}.nsit-filter-color-field.is-hidden{display:none}.nsit-filter-form-actions{justify-content:flex-end;margin:5px -14px -14px;padding:12px 14px;border-top:1px solid var(--nsit-line);background:var(--nsit-surface)}.nsit-filter-form-actions button:last-child{border-color:var(--nsit-info);background:var(--nsit-info);color:var(--nsit-on-info)}.nsit-filter-rule-list{display:grid;gap:0;margin:0;padding:0;list-style:none}.nsit-filter-rule-list li{display:grid;grid-template-columns:9px minmax(0,1fr) auto;align-items:center;column-gap:14px;margin:0;padding:8px 14px;border-bottom:1px solid var(--nsit-line-soft-2)}.nsit-filter-rule-list li[hidden]{display:none}.nsit-filter-rule-list li.is-disabled{opacity:.5}.nsit-filter-rule-copy{display:grid;gap:1px;min-width:0}.nsit-filter-rule-list strong,.nsit-filter-rule-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.nsit-filter-rule-list strong{line-height:20px}.nsit-filter-rule-list small{color:var(--nsit-muted);font-size:12px;line-height:17px}.nsit-filter-rule-color{width:9px;height:30px;border-radius:99px}.nsit-filter-rule-tools{display:flex;align-items:center;gap:9px;height:28px;white-space:nowrap}.nsit-filter-switch{position:relative;display:block;flex:none;width:30px;height:18px;cursor:pointer}.nsit-filter-switch input{position:absolute;opacity:0}.nsit-filter-switch i{display:block;width:30px;height:18px;border-radius:99px;background:var(--nsit-knob-off)}.nsit-filter-switch i::after{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--nsit-switch-knob);content:"";transition:transform .15s}.nsit-filter-switch input:checked+i{background:var(--nsit-switch-on)}.nsit-filter-switch input:checked+i::after{transform:translateX(12px)}.nsit-filter-rule-actions{display:flex;align-items:center;gap:2px;height:28px;white-space:nowrap}.nsit-filter-rule-actions button{display:inline-flex;align-items:center;height:28px;margin:0;padding:0 4px;border:0;background:transparent;color:var(--nsit-info);font-size:12px;line-height:1}.nsit-filter-rule-actions button:hover{background:transparent;color:var(--nsit-info-ink-2);text-decoration:underline}.nsit-filter-rule-actions button[data-nsit-filter-action="delete"]{color:var(--nsit-danger-ink-2)}.nsit-filter-rule-actions button[data-nsit-filter-action="delete"]:hover{color:var(--nsit-danger-ink-3)}.nsit-filter-empty{margin:0;padding:22px 14px;color:var(--nsit-muted);text-align:center}');
     ensurePostFilterTrigger();
     filterPostListItems();
   }
