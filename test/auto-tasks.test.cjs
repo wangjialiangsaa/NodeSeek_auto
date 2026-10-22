@@ -6,10 +6,15 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,5));
 const settingsKey='nsit-auto-settings-v1';
 const future=Date.UTC(2030,0,1);
 
-function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,confirmReply=true}={}) {
+function threadPage(postId=123,{page=1,next=false,author=8}={}) {
+  return `<div class="post-title"><h1><a href="/post-${postId}-1">抽奖帖</a></h1></div><ul class="comments"><li class="content-item" id="${(page-1)*10+1}"><a class="author-name" href="/space/${author}">用户</a><article class="post-content">参与</article></li></ul><nav aria-label="pagination"><span class="pager-cur" href="/post-${postId}-${page}">${page}</span>${next?`<a href="/post-${postId}-${page+1}" rel="next">下一页</a>`:''}</nav>`;
+}
+
+function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,threadFetch,confirmReply=true}={}) {
+  const postId=Number(new URL(url).pathname.match(/post-(\d+)/)?.[1]||123);
   const href=link??`https://www.nodeseek.com/lucky?post=123&time=${future}&count=1&start=1`;
   const dom=new JSDOM(`<html><head></head><body><article class="content-item" id="0"><a class="author-name" href="/space/8">OP</a><div class="post-content"><a href="${href}">抽奖链接</a></div></article><div id="editor"><div class="md-editor"><div id="editor-body"><div class="window_header"><div>内容 预览 对照</div><div><a href="https://www.runoob.com/markdown/md-tutorial.html">支持 Markdown</a></div></div><textarea aria-label="发言栏"></textarea></div><div class="topic-select"><button class="submit" type="button">发布评论</button></div></div></div></body></html>`,{url,runScripts:'outside-only',pretendToBeVisual:true});
-  const w=dom.window,d=w.document,requests=[],historyRequests=[],posts=[];
+  const w=dom.window,d=w.document,requests=[],historyRequests=[],threadRequests=[],posts=[];
   const observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver {constructor(fn){super(fn);observers.push(this);}};
   let runtime;
@@ -24,9 +29,10 @@ function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false
     if(locks.has(name))return callback(null);locks.add(name);
     try{return await callback({name});}finally{locks.delete(name);}
   }}});
-  w.__config__={user:uid?{member_id:uid}:null,postData:{postId:123,op:{uid:8},comments:[{floorIndex:0,poster:{uid:8},markdown:`[抽奖](${href})`}]}};
+  w.__config__={user:uid?{member_id:uid}:null,postData:{postId,op:{uid:8},comments:[{floorIndex:0,poster:{uid:8},markdown:`[抽奖](${href})`}]}};
   w.fetch=async(...args)=>{
     if(String(args[0]).startsWith('/api/content/list-comments')){historyRequests.push(args);return historyFetch?historyFetch(...args):{ok:true,status:200,json:async()=>({success:true,comments:[]})};}
+    if(String(args[0]).startsWith('/post-')){threadRequests.push(args);return threadFetch?threadFetch(...args):{ok:true,status:200,text:async()=>threadPage(postId)};}
     requests.push(args);return fetch?fetch(...args):{ok:true,status:200,json:async()=>({success:true,message:'签到成功'})};
   };
   const input=d.querySelector('#editor-body>textarea');input.value=draft;
@@ -39,8 +45,8 @@ function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false
   }).join('\n');
   w.eval(`(function(){${source}\nwindow.testApi={createApp,installToolbar:typeof installEditorToolbar==='function'?installEditorToolbar:null,installAuto:typeof installAutomaticTasks==='function'?installAutomaticTasks:null,openSettings:typeof openAutomaticTaskSettings==='function'?openAutomaticTaskSettings:null};})();`);
   const app=w.testApi.createApp({replyMode:true});app._nsitEditor=d.querySelector('#editor-body');d.querySelector('.window_header>div:last-child').prepend(app);
-  function install(){assert.equal(typeof w.testApi.installAuto,'function','automatic tasks module exists');runtime=w.testApi.installAuto({autoStart:false});return runtime;}
-  return {w,d,app,input,posts,requests,historyRequests,storage,install,get runtime(){return runtime;}};
+  function install({autoStart=false}={}){assert.equal(typeof w.testApi.installAuto,'function','automatic tasks module exists');runtime=w.testApi.installAuto({autoStart});return runtime;}
+  return {w,d,app,input,posts,requests,historyRequests,threadRequests,storage,install,get runtime(){return runtime;}};
 }
 
 test('compact toolbar toggle preserves button labels and dismisses on Escape/outside click',async t=>{
@@ -76,6 +82,21 @@ test('enabled lottery reply uses native submit once and does not require an API 
   assert.deepEqual(h.posts,['感谢分享！'],JSON.stringify(runtime.status));assert.equal(h.requests.length,0);
 });
 
+test('opening a thread with the supplied mode=view lottery replies despite a long personal history',async t=>{
+  const h=setup(t,{url:'https://www.nodeseek.com/post-1002045-1',link:'https://www.nodeseek.com/lucky?post=1002045&time=1792720800000&count=1&start=1&duplicate=false&mode=view',settings:{dailyCheckin:false,autoReply:true,replyText:'接好运！'},historyFetch:async()=>({ok:true,status:200,json:async()=>({success:true,comments:[{post_id:999484,floor_id:1}]})})});
+  h.w.Date.now=()=>Date.UTC(2026,9,22,13);
+  const runtime=h.install();await runtime.run();await runtime.run();
+  assert.deepEqual(h.posts,['接好运！'],JSON.stringify(runtime.status));
+  assert.equal(h.historyRequests.length,0,'unrelated personal history is not needed');
+});
+
+test('entering the lottery thread triggers the saved reply without manually running the task',{timeout:3000},async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与一下！'}});
+  const submitted=new Promise(resolve=>h.d.querySelector('.submit').addEventListener('click',resolve,{once:true}));
+  h.install({autoStart:true});await submitted;
+  assert.deepEqual(h.posts,['参与一下！']);
+});
+
 for(const [name,options] of [
   ['ordinary thread',{link:'https://www.nodeseek.com/post-555-1'}],
   ['external lottery URL',{link:`https://example.com/lucky?post=123&time=${future}`}],
@@ -95,28 +116,65 @@ test('own threads and already replied threads are skipped',async t=>{
   await runtime.run();assert.equal(h.posts.length,0);
 });
 
-test('reply waits for history and skips an older reply outside loaded comments',async t=>{
-  let resolveHistory;const pending=new Promise(resolve=>{resolveHistory=resolve;});
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},historyFetch:()=>pending});
-  const run=h.install().run();await tick();assert.equal(h.posts.length,0);assert.equal(h.historyRequests.length,1);
-  resolveHistory({ok:true,status:200,json:async()=>({success:true,comments:[{post_id:123,floor_id:25}]})});
+test('reply checks later thread pages and skips an older reply outside loaded comments',async t=>{
+  let resolvePage;const pending=new Promise(resolve=>{resolvePage=resolve;});
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:url=>String(url).endsWith('-1')?{ok:true,text:async()=>threadPage(123,{next:true})}:pending});
+  const run=h.install().run();await tick();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,2);
+  resolvePage({ok:true,status:200,text:async()=>threadPage(123,{page:2,author:7})});
   await run;assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
 });
 
-test('history lookup follows pages and blocks replies on errors or incomplete history',async t=>{
+test('thread verification follows pages and blocks replies on failed or unrelated pages',async t=>{
   const settings={dailyCheckin:false,autoReply:true,replyText:'谢谢'};
-  const a=setup(t,{settings,historyFetch:async url=>({ok:true,status:200,json:async()=>({success:true,comments:new URL(url,'https://www.nodeseek.com').searchParams.get('page')==='1'?[{post_id:999,floor_id:1}]:[]})})});
-  await a.install().run();assert.equal(a.historyRequests.length,2);assert.equal(a.posts.length,1);
-  const b=setup(t,{settings,historyFetch:async()=>({ok:false,status:503,json:async()=>({success:false})})});
-  const runtime=b.install();await runtime.run();await runtime.run();assert.equal(b.posts.length,0);assert.equal(b.historyRequests.length,1);
-  const c=setup(t,{settings,historyFetch:async()=>({ok:true,status:200,json:async()=>({success:true,comments:[{post_id:999,floor_id:1}]})})});
-  await c.install().run();assert.equal(c.posts.length,0);assert.equal(c.historyRequests.length,10);
+  const a=setup(t,{settings,threadFetch:async url=>{const page=Number(String(url).split('-').at(-1));return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<2})};}});
+  await a.install().run();assert.equal(a.threadRequests.length,2);assert.equal(a.posts.length,1);
+  assert.deepEqual(a.threadRequests.map(([url])=>url),['/post-123-1','/post-123-2']);
+  const b=setup(t,{settings,threadFetch:async()=>({ok:false,status:503,text:async()=>''})});
+  const runtime=b.install();await runtime.run();await runtime.run();assert.equal(b.posts.length,0);assert.equal(b.threadRequests.length,1);
+  const c=setup(t,{settings,threadFetch:async()=>({ok:true,status:200,text:async()=>threadPage(999)})});
+  await c.install().run();assert.equal(c.posts.length,0);
 });
 
-test('typing a draft while history loads preserves it and cancels automatic posting',async t=>{
-  let resolveHistory;const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},historyFetch:()=>new Promise(resolve=>{resolveHistory=resolve;})});
+test('a previous reply beyond ten thread pages still prevents automatic posting',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
+    const page=Number(String(url).split('-').at(-1));
+    return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<11,author:page===11?7:8})};
+  }});
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,11);
+});
+
+for(const [name,response] of [
+  ['login redirect',{ok:true,url:'https://www.nodeseek.com/signIn',text:async()=>threadPage()}],
+  ['repeated first page',{ok:true,text:async()=>threadPage(123,{page:1,next:true})}],
+  ['missing comment author',{ok:true,text:async()=>threadPage().replace(/class="author-name"/,'class="unknown"')}],
+  ['missing pagination',{ok:true,text:async()=>threadPage(123,{page:2,next:true}).replace(/<nav[\s\S]*<\/nav>/,'')}],
+  ['missing current page',{ok:true,text:async()=>threadPage(123,{page:2}).replace(/<span[\s\S]*<\/span>/,'')}],
+  ['empty partial page',{ok:true,text:async()=>'<div class="post-title"><a href="/post-123-1">抽奖帖</a></div><ul class="comments"></ul>'}],
+])test(`thread verification skips ${name}`,async t=>{
+  let calls=0;
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async()=>++calls===1?{ok:true,text:async()=>threadPage(123,{next:true})}:response});
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+});
+
+test('known later pages are still checked when their next link disappears from a fetched page',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
+    const page=Number(String(url).split('-').at(-1));
+    return {ok:true,text:async()=>threadPage(123,{page,author:page===2?7:8})};
+  }});
+  const pager=h.d.createElement('nav');pager.setAttribute('aria-label','pagination');pager.innerHTML='<a href="/post-123-2">2</a>';h.d.body.append(pager);
+  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,2);
+});
+
+test('a complete first page with no comments can receive the first reply',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},threadFetch:async()=>({ok:true,text:async()=>threadPage().replace(/<li[\s\S]*<\/li>/,'')})});
+  await h.install().run();assert.deepEqual(h.posts,['参与']);
+});
+
+test('typing a draft while thread verification loads preserves it and cancels automatic posting',async t=>{
+  let resolvePage;const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:()=>new Promise(resolve=>{resolvePage=resolve;})});
   const run=h.install().run();await tick();h.input.value='正在输入的新草稿';
-  resolveHistory({ok:true,status:200,json:async()=>({success:true,comments:[]})});await run;
+  assert.equal(h.threadRequests.length,1);
+  resolvePage({ok:true,status:200,text:async()=>threadPage()});await run;
   assert.equal(h.posts.length,0);assert.equal(h.input.value,'正在输入的新草稿');
 });
 

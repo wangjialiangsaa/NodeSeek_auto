@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.57**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.58**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -58,9 +58,9 @@
 从 **“🐔 工具 → ⚙ 自动任务”** 或油猴菜单 **“自动任务设置”** 打开设置。
 
 - **每日自动签到**默认开启：登录并打开 NodeSeek 时检查签到，北京时间跨天后继续检查，领取固定奖励。关闭网页时不运行，可在设置中关闭。
-- **抽奖帖自动回复**默认关闭，回复语句留空。先填写自定义语句，再勾选开启并保存；只处理当前打开的帖子中、楼主正文内指向本帖且尚未到期的官方抽奖链接。
+- **抽奖帖自动回复**默认关闭，回复语句留空。先填写自定义语句，再勾选开启并保存；进入帖子后自动检测楼主正文内指向本帖、尚未到期的官方 `/lucky?post=…&time=…&mode=view` 抽奖链接，发送保存的语句，无需再点击抽奖链接。
 - 已回复、自己发起的抽奖和已有草稿会跳过；不遍历其它帖子。按账号与帖子记录结果，多标签页共用任务锁，避免重复提交。
-- 发送前最多核实 10 页历史回复；发现本帖旧回复会跳过。历史接口失败或 10 页后尚未查完时也跳过，并显示原因。
+- 发送前逐页核实**当前帖子**的回复；发现你的旧回复会跳过，不再因个人历史评论超过 10 页而无法触发。分页加载失败、登录验证或页面信息不完整时跳过，并显示原因。
 - 回复通过站点原生“发布评论”按钮提交。提交后如无法确认结果，设置中会提示检查网页，不会自动再次发送。浏览器不支持任务锁时保留手动操作。
 
 ### 出🐔模板

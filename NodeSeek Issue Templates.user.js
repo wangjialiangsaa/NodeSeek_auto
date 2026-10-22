@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.57
+// @version      1.4.58
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/nodeseek-issue-template
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.57';
+  const VERSION = '1.4.58';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6526,7 +6526,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     if (!dialog) {
       injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
-      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前最多核实 10 页历史回复；接口失败或历史未查完时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
+      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
       const close = () => { dialog.hidden = true; };
       dialog.querySelector('[data-nsit-auto-close]').addEventListener('click', close);
@@ -6597,7 +6597,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     const pageWindow = automaticTaskPageWindow();
     pageWindow[AUTO_TASK_RUNTIME_KEY]?.disconnect?.();
     let disposed = false, running = null, scheduled = null;
-    const historyRetryAt = new Map();
+    const replyRetryAt = new Map();
     const controller = new AbortController();
     const runtime = { status: { checkin: '等待检查', reply: '未开启' }, run, schedule, disconnect() {
       disposed = true; controller.abort(); clearInterval(interval); clearTimeout(scheduled);
@@ -6608,7 +6608,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
       if (!navigator.locks?.request) { status(task === 'checkin' ? 'checkin' : 'reply', '当前浏览器不支持任务锁，请手动操作'); return; }
       await navigator.locks.request(`nsit-auto-${uid}-${task}`, { ifAvailable: true }, async lock => { if (lock && !disposed) await callback(); });
     }
-    async function requestJson(url, options = {}) {
+    async function request(url, options = {}, format = 'json') {
       if (disposed) throw new Error('任务已取消');
       const requestController = new AbortController();
       const abortRequest = () => requestController.abort();
@@ -6616,29 +6616,56 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
       const timeout = setTimeout(abortRequest, 20000);
       try {
         const response = await fetch(url, { ...options, credentials: 'same-origin', signal: requestController.signal });
-        return { response, payload: await response.json() };
+        return { response, payload: format === 'text' ? await response.text() : await response.json() };
       } finally {
         clearTimeout(timeout); controller.signal.removeEventListener('abort', abortRequest);
       }
     }
-    async function verifyReplyHistory(uid, postId) {
+    async function verifyThreadReplies(uid, postId) {
       const key = `${uid}-${postId}`;
-      if (historyRetryAt.get(key) > Date.now()) { status('reply', '历史回复暂无法核实，稍后重试；不会自动发送'); return false; }
-      status('reply', '正在核实历史回复…');
+      if (replyRetryAt.get(key) > Date.now()) { status('reply', '本帖回复暂无法核实，稍后重试；不会自动发送'); return false; }
       try {
-        for (let page = 1; page <= 10; page += 1) {
-          const { response, payload } = await requestJson(`/api/content/list-comments?uid=${encodeURIComponent(uid)}&page=${page}`);
-          if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) return false;
-          if (!response.ok || payload?.success !== true || !Array.isArray(payload.comments)) throw new Error('历史回复接口不可用');
-          mergeRepliedComments(payload);
-          if (automaticTaskHasReply(uid, postId)) { status('reply', '本帖已有历史回复，已跳过'); return false; }
-          if (!payload.comments.length) return true;
+        let lastPage = 1;
+        function includePages(doc) {
+          for (const link of doc.querySelectorAll('[aria-label="pagination"] [href]')) {
+            if (link.closest('.post-content')) continue;
+            const url = new URL(link.getAttribute('href'), location.href);
+            const match = url.pathname.match(new RegExp(`^/post-${postId}-(\\d+)/?$`));
+            if (url.origin === location.origin && match) lastPage = Math.max(lastPage, Number(match[1]));
+          }
         }
-        throw new Error('已检查 10 页，历史回复尚未查完');
+        includePages(document);
+        // 查当前帖的完整评论，而不是要求读完账号的全部历史评论。
+        for (let page = 1; ; page += 1) {
+          status('reply', `正在核实本帖第 ${page} 页回复…`);
+          const path = `/post-${postId}-${page}`;
+          const { response, payload } = await request(path, { cache: 'no-store' }, 'text');
+          if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) return false;
+          const finalURL = new URL(response.url || path, location.href);
+          if (!response.ok || finalURL.origin !== location.origin || finalURL.pathname.replace(/\/$/, '') !== path) throw new Error('本帖回复页面加载失败');
+          const doc = new DOMParser().parseFromString(payload, 'text/html');
+          const list = doc.querySelector('ul.comments');
+          const titleURL = new URL(doc.querySelector('.post-title a[href]')?.getAttribute('href') || '/', location.href);
+          if (!list || titleURL.origin !== location.origin || !new RegExp(`^/post-${postId}-\\d+/?$`).test(titleURL.pathname)) throw new Error('未取得本帖回复，请检查站点登录或验证');
+          const pager = Array.from(doc.querySelectorAll('[aria-label="pagination"]')).find(node => !node.closest('.post-content'));
+          const current = pager?.querySelector('.pager-cur[href]')?.getAttribute('href');
+          if (!current || new URL(current, location.href).pathname.replace(/\/$/, '') !== path) throw new Error('本帖回复分页不完整');
+          includePages(doc);
+          const ownReplies = [];
+          for (const item of list.querySelectorAll(':scope > .content-item')) {
+            const author = item.querySelector('a.author-name[href]');
+            const authorURL = new URL(author?.getAttribute('href') || '/', location.href);
+            if (!/^\d+$/.test(item.id) || Number(item.id) < 1 || !author || authorURL.origin !== location.origin || !/^\/space\/\d+\/?$/.test(authorURL.pathname)) throw new Error('本帖回复信息不完整');
+            if (authorURL.pathname.replace(/\/$/, '') === `/space/${uid}`) ownReplies.push({ post_id: Number(postId), floor_id: Number(item.id) });
+          }
+          if (ownReplies.length) mergeRepliedComments({ success: true, comments: ownReplies });
+          if (ownReplies.length || automaticTaskHasReply(uid, postId)) { status('reply', '本帖已有回复，已跳过'); return false; }
+          if (page >= lastPage) return true;
+        }
       } catch (error) {
         if (disposed) return false;
-        historyRetryAt.set(key, Date.now() + 5 * 60 * 1000);
-        status('reply', `${error.message || '历史回复无法核实'}，本次跳过`); return false;
+        replyRetryAt.set(key, Date.now() + 5 * 60 * 1000);
+        status('reply', `${error.message || '本帖回复无法核实'}，本次跳过`); return false;
       }
     }
     async function checkin(uid) {
@@ -6652,7 +6679,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
         autoTaskWrite(key, { day, nextAt: now + 5 * 60 * 1000, done: false });
         status('checkin', '签到中…');
         try {
-          const { response, payload } = await requestJson('/api/attendance?random=false', { method: 'POST' });
+          const { response, payload } = await request('/api/attendance?random=false', { method: 'POST' });
           const message = String(payload?.message || payload?.error || '');
           if (!response.ok || !(payload?.success === true || /已(?:经)?签(?:到|过)|already\s+(?:signed|checked)/i.test(message))) throw new Error(message || `签到失败（HTTP ${response.status}）`);
           const text = message || '今日签到成功';
@@ -6682,7 +6709,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
         const editor = automaticTaskEditor();
         if (!editor) { status('reply', '原生回复框暂不可用'); return; }
         if (editor.get()) { status('reply', '检测到草稿，保留草稿并跳过自动回复'); return; }
-        if (!await verifyReplyHistory(uid, postId)) return;
+        if (!await verifyThreadReplies(uid, postId)) return;
         const ready = automaticTaskSettings();
         if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId || !editor.scope.isConnected || !editor.submit.isConnected || editor.get() || !ready.autoReply || ready.replyText !== settings.replyText || !automaticTaskDraw(postId) || editor.submit.disabled || automaticTaskHasReply(uid, postId)) {
           status('reply', '页面、设置或草稿已变化，本次跳过'); return;
