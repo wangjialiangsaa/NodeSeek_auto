@@ -107,3 +107,16 @@ test('posting pages retain the native editor layout',async t=>{
   assert.equal(d.querySelector('.nst-modebar'),null);
   assert.ok(d.querySelector('.nsit-trigger'));
 });
+
+for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.min.user.js']) {
+  test(`${file}: native reply Enter shortcut is installed`,async t=>{
+    const {d,cm}=await setup(t,file,{flags:{threadedReading:false}});
+    const input=d.createElement('textarea');d.querySelector('.CodeMirror').append(input);
+    cm.getInputField=()=>input;
+    let sends=0;d.querySelector('button.submit').addEventListener('click',()=>sends++);
+    const event=new d.defaultView.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+    input.dispatchEvent(event);
+    assert.equal(event.defaultPrevented,true);assert.equal(sends,1);
+    assert.equal(cm.getValue(),'existing draft');
+  });
+}

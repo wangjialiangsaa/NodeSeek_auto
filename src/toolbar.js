@@ -1,3 +1,41 @@
+  function installReplyKeyboard(app) {
+    const editor = app._nsitEditor;
+    if (!editor || !/^\/post-\d+-\d+\/?$/.test(location.pathname)) return;
+    editor._nsitReplyKeyboardController?.abort();
+    const controller = new AbortController();
+    editor._nsitReplyKeyboardController = controller;
+    const options = { capture: true, signal: controller.signal };
+    let composing = false;
+    editor.addEventListener('compositionstart', () => { composing = true; }, options);
+    editor.addEventListener('compositionend', () => { composing = false; }, options);
+    editor.addEventListener('keydown', event => {
+      if (!/^\/post-\d+-\d+\/?$/.test(location.pathname) || event.key !== 'Enter' || event.isComposing || composing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest(`#${APP_ID}, .CodeMirror-dialog`)) return;
+      const cmElement = target.closest('.CodeMirror');
+      const cm = cmElement?.CodeMirror;
+      const input = cm?.getInputField?.() || (target.matches('textarea') ? target : null);
+      if (!input || (input !== target && !input.contains(target)) || input.disabled || input.readOnly || cm?.getOption?.('readOnly')) return;
+      const area = editor.closest('.md-editor, form, #editor') || editor.parentElement;
+      const submit = Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}`));
+      if (!submit || /保存|修改|更新/.test(submit.textContent || submit.value || '')) return;
+      // Handle before CodeMirror and native shortcuts so one key makes one action.
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (event.repeat) return;
+      if (event.shiftKey) {
+        if (cm?.replaceSelection) cm.replaceSelection('\n', 'end', '+input');
+        else if (input.matches('textarea')) {
+          input.setRangeText('\n', input.selectionStart, input.selectionEnd, 'end');
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        return;
+      }
+      const content = cm?.getValue ? cm.getValue() : input.value;
+      if (!String(content || '').trim()) return;
+      if (!submit.disabled && submit.getAttribute('aria-disabled') !== 'true') submit.click();
+    }, options);
+  }
+
   function installEditorToolbar(app) {
     if (app.querySelector('[data-nsit-tools-toggle]') || app.dataset.nsitFlagHost !== undefined) return;
     const toolbox = document.createElement('span');

@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.60**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.61**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/nodeseek-issue-template/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -19,6 +19,8 @@
 个人信息统计栏内提供漏斗图标与“过滤”入口，位于左列底部，与等级、鸡腿、通知等项目保持相同的图标、字号和间距。点击后打开“过滤”面板，支持关键词、用户昵称以及屏蔽和高亮处理；原顶部导航和齿轮旁的入口已移至此处，已有规则继续使用。折叠与隐藏均直接移除匹配帖子在列表中的显示，不留提示条或“查看”按钮。
 
 编辑栏只显示一个 **“🐔 工具”** 按钮，点击展开出鸡模板、粉色上传图片、计算器、收鸡模板和自动任务设置。展开后保留原按钮的图标和颜色，点击空白处或按 Esc 收起。**“出🐔模板”**用于发布出售帖，**“收🐔模板”**用于发布收购帖，两者互不影响。
+
+帖子回复栏支持 **Enter 发送、Shift + Enter 换行**，发送使用原站评论按钮。中文输入法选词和空白内容不会触发发送，长按回车不会重复发送；发帖和脚本设置表单保持原来的键盘操作。
 
 ### 出🐔模板
 
