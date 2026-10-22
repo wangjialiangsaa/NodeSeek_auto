@@ -4640,10 +4640,11 @@
       const host = blocks[column] || blocks[0] || panel;
       let node = document.querySelector(`[data-nsit-lucky-notify="${kind}"]`);
       if (!node) {
-        // 和站点原生条目同构：<div><a>图标 文字 数字</a></div>
-        const holder = document.createElement('div');
-        holder.innerHTML = `<div data-nsit-lucky-notify="${kind}"><a href="javascript:void(0)"><svg class="iconpark-icon" aria-hidden="true"><use href="#${icon}"></use></svg><span>${escapeHtml(label)} </span><span class="nsit-lucky-notify-dot" data-nsit-lucky-notify-count>0</span></a></div>`;
-        node = holder.firstElementChild;
+        // 原站行距依赖 Vue scope 属性；继承原生行，让后续设置行也保持 6px 间隔。
+        const template = Array.from(host.children).find(row => !row.matches('[data-nsit-lucky-notify],[data-nsit-post-filter-entry],[data-nsit-automation-entry]') && row.querySelector('a'));
+        node = template?.cloneNode(false) || document.createElement('div');
+        node.removeAttribute('id'); node.dataset.nsitLuckyNotify = kind;
+        node.innerHTML = `<a href="javascript:void(0)"><svg class="iconpark-icon" aria-hidden="true"><use href="#${icon}"></use></svg><span>${escapeHtml(label)} </span><span class="nsit-lucky-notify-dot" data-nsit-lucky-notify-count>0</span></a>`;
       }
       if (node.parentElement !== host) host.append(node);
       const badge = node.querySelector('[data-nsit-lucky-notify-count]');
