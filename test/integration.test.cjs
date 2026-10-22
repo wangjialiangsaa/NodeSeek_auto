@@ -11,7 +11,7 @@ async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,fla
   d.body.insertAdjacentHTML('afterbegin','<aside id="nsk-right-panel-container"><div class="user-stat"><div class="stat-block"><div data-v-native><a data-v-native href="/progress"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>等级 Lv 5</span></a></div></div><div class="stat-block"><div data-v-native><a data-v-native href="/my-post"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>主题帖 153</span></a></div></div></div></aside>');
   const observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver{constructor(callback){super(callback);observers.push(this);}};
-  t.after(()=>{observers.forEach(o=>o.disconnect());w.close();});
+  t.after(()=>{w.__nodeSeekAuthorInfo__?.disconnect();observers.forEach(o=>o.disconnect());w.close();});
   const storage=new Map();
   w.GM_getValue=(key,fallback)=>storage.has(key)?storage.get(key):fallback;
   w.GM_setValue=(key,value)=>storage.set(key,value);
@@ -21,7 +21,7 @@ async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,fla
   w.fetch=fetch|| (async()=>({ok:false,status:503,json:async()=>({})}));
   w.scrollTo=()=>{};w.HTMLElement.prototype.scrollIntoView=()=>{};
   w.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
-  w.IntersectionObserver=class{constructor(callback){this.callback=callback;intersections.push(this);}observe(target){this.target=target;}disconnect(){this.target=null;}};
+  w.IntersectionObserver=class{constructor(callback){this.callback=callback;intersections.push(this);}observe(target){this.target=target;}unobserve(target){if(this.target===target)this.target=null;}disconnect(){this.target=null;}};
   w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001},{floorIndex:2,commentId:1002}]}};
   let draft='existing draft';
   const cm={getValue:()=>draft,setValue:value=>{draft=value;},refresh(){},focus(){},setSize(){},on(){}};
@@ -115,6 +115,23 @@ test('posting pages retain the native editor layout',async t=>{
 });
 
 for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.min.user.js']) {
+  test(`${file}: author profiles work in native replies and respect the feature switch`,async t=>{
+    let profileRequests=0;
+    const h=await setup(t,file,{fetch:async url=>{
+      if(!String(url).includes('/api/account/getInfo/'))return {ok:false};
+      profileRequests++;return {ok:true,json:async()=>({success:true,detail:{member_id:19096,rank:5,coin:2682,nPost:63,nComment:381}})};
+    }});
+    const author=h.d.getElementById('2').querySelector('.author-name'),header=h.d.createElement('div');
+    header.className='author-info';author.before(header);header.append(author);author.href='/space/19096';
+    await pause(80);h.bottom();await pause(100);
+    assert.match(h.d.querySelector('[data-nsit-author-info]').textContent,/Lv 5/);assert.equal(profileRequests,1);
+    h.menus.get('功能开关')();const flag=h.d.querySelector('[data-nsit-flag="authorInfo"]');assert.ok(flag);
+    flag.checked=false;flag.dispatchEvent(new h.w.Event('change',{bubbles:true}));await pause(80);
+    assert.equal(h.d.querySelector('[data-nsit-author-info]'),null);assert.equal(author.isConnected,true);
+    flag.checked=true;flag.dispatchEvent(new h.w.Event('change',{bubbles:true}));await pause(80);
+    assert.match(h.d.querySelector('[data-nsit-author-info]').textContent,/鸡腿 2682/);assert.equal(profileRequests,1);
+  });
+
   test(`${file}: native reply Enter shortcut is installed`,async t=>{
     const {d,cm}=await setup(t,file,{flags:{threadedReading:false}});
     const input=d.createElement('textarea');d.querySelector('.CodeMirror').append(input);

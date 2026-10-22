@@ -137,6 +137,7 @@
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
     ensureAutomaticTaskTrigger();
+    window.__nodeSeekAuthorInfo__?.schedule();
     filterPostListItems();
   }
 

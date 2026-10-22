@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.62';
+  const VERSION = '1.4.63';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -18,6 +18,7 @@
     ['luckyNotify', '抽奖与中奖通知', '个人统计里的「抽奖 / 中奖」入口，以及帖子的开奖公告按钮'],
     ['tradeStatus', '交易状态', '帖子页 #0 楼旁的「已出 / 已收」按钮'],
     ['repliedPosts', '我的回复', '帖子页和列表页的回复楼层标记'],
+    ['authorInfo', '用户资料', '楼主和各楼层的等级、鸡腿、星辰、主题、评论和加入天数'],
     ['postFilter', '过滤', '个人信息统计栏里的关键词屏蔽 / 高亮设置入口'],
     ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
   ];

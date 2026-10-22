@@ -613,8 +613,10 @@
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
+  const authorInfo = installAuthorInfo();
   const observer = new MutationObserver(() => {
     automaticTasks.schedule();
+    authorInfo.schedule();
     renderLuckyTrigger();
     runLuckyWriteback();
     showLuckyWritebackResult();
