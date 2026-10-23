@@ -54,6 +54,8 @@ test('background settings accept image URLs but reject executable or credential 
   assert.equal(s.opacity, 35);
   assert.equal(s.focusX, 92);
   assert.equal(s.focusY, 50);
+  assert.equal(s.lowPower, true, 'existing saved backgrounds default to power saving');
+  assert.equal(normalize({ lowPower: false }).lowPower, false);
 });
 
 test('Bing UHD wallpaper thumbnail links load the original without rewriting other image hosts or assets', t => {

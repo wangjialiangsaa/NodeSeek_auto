@@ -51,6 +51,49 @@ function setup(t, { bright = true } = {}) {
 }
 const enabled = backgroundUrl => ({ enabled: true, backgroundUrl, opacity: 35, autoContrast: true, autoFocus: true });
 
+test('power saving keeps the full resolution background while disabling live blur and allows restoring it', async t => {
+  const { w, d, loads, controller } = setup(t);
+  const pending = controller.apply(enabled(firstURL)); loads[0].onload(); await pending;
+  assert.equal(d.documentElement.style.getPropertyValue('--nsbg-backdrop'), 'none');
+  assert.ok(d.querySelector('[data-nsit-background-layer]').style.backgroundImage.includes(firstURL));
+  await controller.apply({ ...enabled(firstURL), lowPower: false, blur: 16 });
+  assert.equal(d.documentElement.style.getPropertyValue('--nsbg-backdrop'), 'blur(16px)');
+  await controller.apply({ ...enabled(firstURL), lowPower: false, blur: 0 });
+  assert.equal(d.documentElement.style.getPropertyValue('--nsbg-backdrop'), 'none', 'zero blur must release the filter surface');
+  w.eval('openBackgroundSettings()');
+  const form = d.querySelector('[data-nsit-background-dialog] form');
+  assert.equal(form.elements.namedItem('lowPower').checked, true);
+  assert.equal(form.elements.namedItem('blur').disabled, true);
+  form.elements.namedItem('lowPower').checked = false;
+  form.elements.namedItem('lowPower').dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(form.elements.namedItem('blur').disabled, false);
+});
+
+test('unchanged settings, viewport and unrelated body classes do not rewrite background styles or recalculate framing', async t => {
+  const { w, d, loads, controller } = setup(t);
+  const autoPosition = w.backgroundAutoPosition;
+  let framingCalls = 0;
+  w.backgroundAutoPosition = (...args) => { framingCalls++; return autoPosition(...args); };
+  const pending = controller.apply(enabled(firstURL)); loads[0].onload(); await pending;
+  loads.find(image => image.crossOrigin).onload(); await wait();
+  const before = framingCalls, mutations = [];
+  const observer = new w.MutationObserver(records => mutations.push(...records));
+  observer.observe(d.documentElement, { attributes: true });
+  await controller.apply(enabled(firstURL));
+  d.body.classList.add('menu-open');
+  w.dispatchEvent(new w.Event('resize'));
+  await wait(130);
+  observer.disconnect();
+  assert.equal(framingCalls, before, 'unchanged background inputs must reuse the framing');
+  assert.equal(mutations.length, 0, 'no root class/style writes are needed for unrelated activity');
+  await controller.apply({ ...enabled(firstURL), opacity: 90 });
+  d.body.classList.add('dark-layout'); await wait();
+  assert.equal(framingCalls, before, 'panel opacity and native theme do not change the image crop');
+  Object.defineProperty(w, 'innerWidth', { value: 480, configurable: true });
+  w.dispatchEvent(new w.Event('resize')); await wait(130);
+  assert.equal(framingCalls, before + 1, 'a genuinely changed viewport must recalculate framing');
+});
+
 test('wallpaper display and image analysis use the full image URL and report the decoded source resolution', async t => {
   const { d, loads, storage, controller } = setup(t);
   const original = 'https://cn.bing.com/th?id=OHR.NaejangsanNP_EN-US7010419904_UHD.jpg&pid=hp';

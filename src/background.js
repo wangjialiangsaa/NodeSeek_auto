@@ -1,6 +1,6 @@
   const BACKGROUND_SETTINGS_KEY = 'nsit-background-settings-v1';
   const BACKGROUND_RUNTIME_KEY = '__nsitCustomBackground__';
-  const BACKGROUND_DEFAULTS = { enabled: false, backgroundUrl: '', blur: 16, opacity: 74, autoContrast: true, autoFocus: true, focusX: 50, focusY: 50 };
+  const BACKGROUND_DEFAULTS = { enabled: false, backgroundUrl: '', lowPower: true, blur: 16, opacity: 74, autoContrast: true, autoFocus: true, focusX: 50, focusY: 50 };
 
   function normalizeBackgroundSettings(value) {
     const saved = value && typeof value === 'object' ? value : {};
@@ -25,7 +25,7 @@
         }
       }
     } catch (_) { /* Invalid stored URLs leave the original appearance intact. */ }
-    return { enabled: saved.enabled === true && !!backgroundUrl, backgroundUrl, blur: number('blur', 0, 32), opacity: number('opacity', 35, 95), autoContrast: saved.autoContrast !== false, autoFocus: saved.autoFocus !== false, focusX: number('focusX', 0, 100), focusY: number('focusY', 0, 100) };
+    return { enabled: saved.enabled === true && !!backgroundUrl, backgroundUrl, lowPower: saved.lowPower !== false, blur: number('blur', 0, 32), opacity: number('opacity', 35, 95), autoContrast: saved.autoContrast !== false, autoFocus: saved.autoFocus !== false, focusX: number('focusX', 0, 100), focusY: number('focusY', 0, 100) };
   }
 
   function backgroundSettings() {
@@ -128,7 +128,7 @@
       html.nsit-background-on #nsk-body{position:relative;background:transparent!important;color:var(--nsbg-ink)!important}
       html.nsit-background-on #nsk-body::before,html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{
         content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--nsbg-panel);
-        -webkit-backdrop-filter:blur(var(--nsbg-blur));backdrop-filter:blur(var(--nsbg-blur))}
+        -webkit-backdrop-filter:var(--nsbg-backdrop,none);backdrop-filter:var(--nsbg-backdrop,none)}
       html.nsit-background-on body>header,html.nsit-background-on body>footer{position:relative;background:transparent!important;color:var(--nsbg-ink)!important}
       html.nsit-background-on #nsk-body :is(.user-stat,.nsk-panel,.nsk-post,.comment-container,.post-list-controler,ul.post-list,li.content-item,li.post-list-item:not(.nsit-filter-highlighted)){background-color:transparent!important}
       html.nsit-background-on #nsk-body :is(.nsk-panel,.post-content,.post-title,.author-info){color:var(--nsbg-ink)}
@@ -180,11 +180,11 @@
   function installCustomBackground() {
     window[BACKGROUND_RUNTIME_KEY]?.disconnect?.();
     injectBackgroundStyles();
-    let disposed = false, revision = 0, frame = null, current = null, resource = null;
+    let disposed = false, revision = 0, frame = null, current = null, resource = null, lastRender = null;
     const cache = new Map(), cancelLoads = new Set();
     const root = document.documentElement;
     const nativeNames = ['bg-main-color', 'bg-sub-color', 'text-color', 'body-text', 'gray-color', 'link-color', 'link-hover-color'];
-    let nativeColors = {};
+    let nativeColors = {}, nativeDark = document.body.classList.contains('dark-layout');
     function readNativeColors() {
       const active = root.classList.contains('nsit-background-on');
       // Resolve the site's theme without our overrides, then restore in the
@@ -192,6 +192,7 @@
       // their original foreground AND background when our panel tone changes.
       root.classList.remove('nsit-background-on');
       const css = getComputedStyle(document.body), dark = document.body.classList.contains('dark-layout');
+      nativeDark = dark;
       nativeColors = Object.fromEntries(nativeNames.map(name => [name, css.getPropertyValue(`--${name}`).trim() || (name.startsWith('bg-') ? dark ? '#272727' : '#fff' : dark ? '#ddd' : '#222')]));
       if (active) root.classList.add('nsit-background-on');
     }
@@ -236,6 +237,7 @@
     }
 
     function removeAppearance() {
+      lastRender = null;
       root.classList.remove('nsit-background-on');
       delete root.dataset.nsitBackgroundTone;
       layer?.remove(); layer = null;
@@ -245,9 +247,18 @@
     function render() {
       if (disposed || !current?.enabled || !resource) return;
       const size = viewport();
-      const position = current.autoFocus ? backgroundAutoPosition(resource.sample, resource, size) : { x: current.focusX, y: current.focusY };
+      const key = JSON.stringify([current, size, nativeColors, nativeDark]);
+      if (layer?.isConnected && lastRender?.key === key && lastRender.resource === resource && lastRender.sample === resource.sample) return;
+      let position = { x: current.focusX, y: current.focusY };
+      if (current.autoFocus) {
+        const cached = resource.framing;
+        if (!cached || cached.sample !== resource.sample || cached.width !== size.width || cached.height !== size.height) {
+          resource.framing = { sample: resource.sample, width: size.width, height: size.height, position: backgroundAutoPosition(resource.sample, resource, size) };
+        }
+        position = resource.framing.position;
+      }
       const crop = backgroundCrop(resource, size, position);
-      const palette = backgroundPalette(resource.sample, current, crop, document.body.classList.contains('dark-layout'));
+      const palette = backgroundPalette(resource.sample, current, crop, nativeDark);
       if (!layer?.isConnected) {
         layer = document.createElement('div'); layer.dataset.nsitBackgroundLayer = ''; layer.setAttribute('aria-hidden', 'true');
         document.body.prepend(layer);
@@ -256,13 +267,14 @@
       // into a style element or HTML template.
       layer.style.backgroundImage = `url(${JSON.stringify(current.backgroundUrl)})`;
       layer.style.backgroundPosition = `${position.x}% ${position.y}%`;
-      const values = { panel: `rgba(${palette.surface.join(',')},${palette.alpha})`, solid: `rgb(${palette.surface.join(',')})`, ink: palette.ink, muted: palette.muted, link: palette.link, border: palette.border, blur: `${current.blur}px` };
+      const values = { panel: `rgba(${palette.surface.join(',')},${palette.alpha})`, solid: `rgb(${palette.surface.join(',')})`, ink: palette.ink, muted: palette.muted, link: palette.link, border: palette.border, blur: `${current.blur}px`, backdrop: current.lowPower || current.blur === 0 ? 'none' : `blur(${current.blur}px)` };
       for (const [key, value] of Object.entries(values)) root.style.setProperty(`--nsbg-${key}`, value);
       for (const [key, value] of Object.entries(nativeColors)) root.style.setProperty(`--nsbg-native-${key}`, value);
       root.dataset.nsitBackgroundTone = palette.mode;
       root.classList.add('nsit-background-on');
       const resolution = `图片 ${resource.width} × ${resource.height} · `;
-      runtime.status = resolution + (resource.sample ? `已适配${palette.mode === 'light' ? '亮色' : '暗色'}背景 · 主体不透明度 ${Math.round(palette.alpha * 100)}%` : `背景已显示 · 使用高对比${palette.mode === 'light' ? '浅色' : '深色'}保护${current.autoFocus ? '与居中取景' : ''}`);
+      runtime.status = resolution + (resource.sample ? `已适配${palette.mode === 'light' ? '亮色' : '暗色'}背景 · 主体不透明度 ${Math.round(palette.alpha * 100)}%` : `背景已显示 · 使用高对比${palette.mode === 'light' ? '浅色' : '深色'}保护${current.autoFocus ? '与居中取景' : ''}`) + (current.lowPower ? ' · 省电显示' : '');
+      lastRender = { key, resource, sample: resource.sample };
     }
 
     async function apply(value, { persist = false } = {}) {
@@ -312,7 +324,10 @@
     }
     const resize = () => { clearTimeout(frame); frame = setTimeout(render, 100); };
     window.addEventListener('resize', resize);
-    const theme = new MutationObserver(() => { readNativeColors(); render(); });
+    const theme = new MutationObserver(() => {
+      if (document.body.classList.contains('dark-layout') === nativeDark) return;
+      readNativeColors(); render();
+    });
     theme.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     const runtime = { apply, refresh, status: '', disconnect() {
       disposed = true; revision++; clearTimeout(frame); window.removeEventListener('resize', resize); theme.disconnect();
@@ -335,6 +350,7 @@
           <label><input type="checkbox" name="enabled"> 启用自定义背景</label>
           <label for="nsit-background-url">图片直链</label><input id="nsit-background-url" type="url" name="backgroundUrl" maxlength="4096" placeholder="https://你的图床/背景.jpg" autocomplete="off">
           <p>将图片上传到自己选择的图床，再粘贴原图直链，避免缩略图放大。支持 JPG、PNG、WebP 等图片；必应 UHD 壁纸链接自动使用原图。</p>
+          <label><input type="checkbox" name="lowPower"> 省电显示（推荐）</label><p>保留高清壁纸与半透明面板，关闭实时毛玻璃以减少渲染开销。取消勾选可恢复毛玻璃效果。</p>
           <label for="nsit-background-blur">毛玻璃模糊 <output data-nsit-background-output="blur"></output></label><input id="nsit-background-blur" type="range" name="blur" min="0" max="32" step="1">
           <label for="nsit-background-opacity">主体不透明度 <output data-nsit-background-output="opacity"></output></label><input id="nsit-background-opacity" type="range" name="opacity" min="35" max="95" step="1">
           <label><input type="checkbox" name="autoContrast"> 自动适配文字对比色</label><p>按图片明暗切换正文、次要文字和链接颜色；为保证可读性，必要时自动提高主体不透明度。代码、徽章与功能按钮保留原有配色。</p>
@@ -348,6 +364,7 @@
       const values = () => Object.fromEntries([...form.elements].filter(node => node.name).map(node => [node.name, node.type === 'checkbox' ? node.checked : node.value]));
       const update = () => {
         for (const key of ['blur', 'opacity', 'focusX', 'focusY']) modal.querySelector(`[data-nsit-background-output="${key}"]`).textContent = `${form.elements.namedItem(key).value}${key === 'blur' ? 'px' : '%'}`;
+        form.elements.namedItem('blur').disabled = form.elements.namedItem('lowPower').checked;
         modal.querySelector('[data-nsit-background-focus]').hidden = form.elements.namedItem('autoFocus').checked;
       };
       modal._nsitFill = () => {
