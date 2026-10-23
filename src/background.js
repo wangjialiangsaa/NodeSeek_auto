@@ -13,7 +13,16 @@
       const raw = typeof saved.backgroundUrl === 'string' ? saved.backgroundUrl.trim() : '';
       if (/^https?:\/\//i.test(raw) && raw.length <= 4096) {
         const url = new URL(raw);
-        if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) backgroundUrl = url.href;
+        if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
+          // Bing's UHD wallpaper links can still request a tiny thumbnail.
+          // Only remove known resize parameters for these official originals;
+          // other hosts may require their query parameters or signatures.
+          if ((url.hostname === 'bing.com' || url.hostname.endsWith('.bing.com')) && url.pathname === '/th'
+            && url.searchParams.getAll('id').length === 1 && /^OHR\.[^/]+_UHD\.jpg$/i.test(url.searchParams.get('id'))) {
+            for (const key of ['w', 'h', 'rs', 'c']) url.searchParams.delete(key);
+          }
+          backgroundUrl = url.href;
+        }
       }
     } catch (_) { /* Invalid stored URLs leave the original appearance intact. */ }
     return { enabled: saved.enabled === true && !!backgroundUrl, backgroundUrl, blur: number('blur', 0, 32), opacity: number('opacity', 35, 95), autoContrast: saved.autoContrast !== false, autoFocus: saved.autoFocus !== false, focusX: number('focusX', 0, 100), focusY: number('focusY', 0, 100) };
@@ -252,7 +261,8 @@
       for (const [key, value] of Object.entries(nativeColors)) root.style.setProperty(`--nsbg-native-${key}`, value);
       root.dataset.nsitBackgroundTone = palette.mode;
       root.classList.add('nsit-background-on');
-      runtime.status = resource.sample ? `已适配${palette.mode === 'light' ? '亮色' : '暗色'}背景 · 主体不透明度 ${Math.round(palette.alpha * 100)}%` : `背景已显示 · 使用高对比${palette.mode === 'light' ? '浅色' : '深色'}保护${current.autoFocus ? '与居中取景' : ''}`;
+      const resolution = `图片 ${resource.width} × ${resource.height} · `;
+      runtime.status = resolution + (resource.sample ? `已适配${palette.mode === 'light' ? '亮色' : '暗色'}背景 · 主体不透明度 ${Math.round(palette.alpha * 100)}%` : `背景已显示 · 使用高对比${palette.mode === 'light' ? '浅色' : '深色'}保护${current.autoFocus ? '与居中取景' : ''}`);
     }
 
     async function apply(value, { persist = false } = {}) {
@@ -324,7 +334,7 @@
         <form novalidate>
           <label><input type="checkbox" name="enabled"> 启用自定义背景</label>
           <label for="nsit-background-url">图片直链</label><input id="nsit-background-url" type="url" name="backgroundUrl" maxlength="4096" placeholder="https://你的图床/背景.jpg" autocomplete="off">
-          <p>将图片上传到自己选择的图床，再粘贴可直接打开图片的地址。支持 JPG、PNG、WebP 等浏览器可显示的图片。</p>
+          <p>将图片上传到自己选择的图床，再粘贴原图直链，避免缩略图放大。支持 JPG、PNG、WebP 等图片；必应 UHD 壁纸链接自动使用原图。</p>
           <label for="nsit-background-blur">毛玻璃模糊 <output data-nsit-background-output="blur"></output></label><input id="nsit-background-blur" type="range" name="blur" min="0" max="32" step="1">
           <label for="nsit-background-opacity">主体不透明度 <output data-nsit-background-output="opacity"></output></label><input id="nsit-background-opacity" type="range" name="opacity" min="35" max="95" step="1">
           <label><input type="checkbox" name="autoContrast"> 自动适配文字对比色</label><p>按图片明暗切换正文、次要文字和链接颜色；为保证可读性，必要时自动提高主体不透明度。代码、徽章与功能按钮保留原有配色。</p>

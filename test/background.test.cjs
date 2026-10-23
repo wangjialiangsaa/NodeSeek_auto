@@ -56,6 +56,20 @@ test('background settings accept image URLs but reject executable or credential 
   assert.equal(s.focusY, 50);
 });
 
+test('Bing UHD wallpaper thumbnail links load the original without rewriting other image hosts or assets', t => {
+  const { normalizeBackgroundSettings: normalize } = helpers(t);
+  const wallpaper = 'https://cn.bing.com/th?id=OHR.NaejangsanNP_EN-US7010419904_UHD.jpg&pid=hp';
+  const thumbnail = wallpaper + '&w=384&h=216&rs=1&c=4';
+  assert.equal(normalize({ enabled: true, backgroundUrl: thumbnail }).backgroundUrl, wallpaper);
+  assert.equal(normalize({ enabled: true, backgroundUrl: wallpaper }).backgroundUrl, wallpaper);
+  for (const url of [
+    'https://cdn.example.com/photo.jpg?w=384&h=216&signature=keep',
+    'https://cn.bing.com/th?id=some-other-image&w=384&h=216',
+    'https://cn.bing.com.example.com/th?id=OHR.Example_UHD.jpg&w=384&h=216',
+    'https://cn.bing.com/other?id=OHR.Example_UHD.jpg&w=384&h=216'
+  ]) assert.equal(normalize({ enabled: true, backgroundUrl: url }).backgroundUrl, url);
+});
+
 test('bright and dark images choose opposite text palettes with readable primary, secondary and link text', t => {
   const { backgroundPalette } = helpers(t);
   const settings = { opacity: 35, autoContrast: true };

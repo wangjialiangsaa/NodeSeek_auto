@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.72**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.73**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -61,6 +61,7 @@
 默认关闭。打开个人信息统计栏“外观”或油猴菜单“背景与外观”，填写自己图床的 **HTTP / HTTPS 图片直链**，可先预览，再保存。图片需能在当前浏览器中直接访问，图床的防盗链或访问限制可能影响显示。
 
 - 背景等比铺满窗口，自动取景根据画面细节分布选择位置，并随窗口大小变化重新适配；也可关闭自动取景，分别调整横向、纵向焦点（0～100）。自动取景不进行人脸识别。
+- 必应 UHD 壁纸链接带缩略图参数时，自动使用原图；外观状态显示实际加载的图片分辨率，方便检查清晰度。
 - 主体使用毛玻璃效果，模糊可调 0～32 px，不透明度可调 35%～95%。根据可读取的图片亮度调整面板和文字颜色；必要时提高实际不透明度，使正文、次要文字和链接达到至少 4.5:1 的对比度。
 - 图床不允许跨域读取图片像素时，仍可显示已加载的图片，改用深色保护底和居中取景。
 - 保留代码、编辑器、徽章及功能按钮的原有配色。

@@ -51,6 +51,19 @@ function setup(t, { bright = true } = {}) {
 }
 const enabled = backgroundUrl => ({ enabled: true, backgroundUrl, opacity: 35, autoContrast: true, autoFocus: true });
 
+test('wallpaper display and image analysis use the full image URL and report the decoded source resolution', async t => {
+  const { d, loads, storage, controller } = setup(t);
+  const original = 'https://cn.bing.com/th?id=OHR.NaejangsanNP_EN-US7010419904_UHD.jpg&pid=hp';
+  const pending = controller.apply(enabled(original + '&w=384&h=216&rs=1&c=4'), { persist: true });
+  assert.equal(loads[0].url, original);
+  loads[0].naturalWidth = 3840; loads[0].naturalHeight = 2160;
+  loads[0].onload(); await pending;
+  assert.ok(d.querySelector('[data-nsit-background-layer]').style.backgroundImage.includes(original));
+  assert.equal(storage.get(key).backgroundUrl, original);
+  assert.equal(loads.find(image => image.crossOrigin).url, original);
+  assert.match(controller.status, /3840 × 2160/);
+});
+
 test('an older image finishing after a newer selection cannot overwrite the visible background or saved URL', async t => {
   const { d, storage, loads, controller } = setup(t);
   const a = controller.apply(enabled(firstURL), { persist: true });
