@@ -2849,7 +2849,7 @@
     if (!block) return;
     let entry = block.querySelector(`:scope > [data-${name}-entry]`);
     if (!entry) {
-      const template = Array.from(block.children).find(node => !node.matches('[data-nsit-lucky-notify],[data-nsit-post-filter-entry],[data-nsit-automation-entry]') && node.querySelector('a'));
+      const template = Array.from(block.children).find(node => !node.matches('[data-nsit-lucky-notify],[data-nsit-post-filter-entry],[data-nsit-automation-entry],[data-nsit-background-entry]') && node.querySelector('a'));
       const nativeLink = template?.querySelector('a');
       if (!nativeLink) return;
       // Copy the native row, icon and label's Vue scope attributes to inherit
@@ -2873,7 +2873,12 @@
       trigger.addEventListener('keydown', event => { if (event.key === ' ') { event.preventDefault(); trigger.click(); } });
       entry.append(trigger);
     }
-    if (entry !== block.lastElementChild) block.append(entry);
+    // More than one setting may share a column. Keep a stable order so two
+    // ensure calls cannot continuously move one another in MutationObserver.
+    const names = ['nsit-post-filter', 'nsit-background', 'nsit-automation'];
+    const following = Array.from(block.children).find(node => names.some((key, index) => index > names.indexOf(name) && node.hasAttribute(`data-${key}-entry`)));
+    if (following) { if (entry.nextElementSibling !== following) block.insertBefore(entry, following); }
+    else if (entry !== block.lastElementChild) block.append(entry);
   }
 
   function ensurePostFilterTrigger() {

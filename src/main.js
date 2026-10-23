@@ -611,6 +611,7 @@
   const threadedReading = installThreadedReading();
   const homeFeedLoading = installHomeFeedLoading();
   injectBaseStyles();
+  const customBackground = installCustomBackground();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
@@ -629,6 +630,7 @@
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
     ensureAutomaticTaskTrigger();
+    customBackground.refresh();
     filterPostListItems();
     renderTradeStatusActions();
   });
@@ -658,3 +660,4 @@
   // 功能开关挂在油猴菜单里：编辑页、帖子页、列表页都能打开同一个设置框
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
+  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('背景与外观', openBackgroundSettings);
