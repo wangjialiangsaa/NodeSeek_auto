@@ -76,6 +76,49 @@ test('automatic task settings start with an empty phrase and prevent enabling an
   assert.equal(h.storage.get(settingsKey).replyText,'祝大家好运！');
 });
 
+test('thread default starts collapsed for existing settings and saves without changing automatic tasks',t=>{
+  const settings={dailyCheckin:false,autoReply:true,replyText:'接好运！'};
+  const h=setup(t,{settings});h.w.testApi.openSettings();
+  const dialog=h.d.querySelector('[data-nsit-auto-dialog]');
+  const collapsed=dialog.querySelector('[name="threadDefaultCollapsed"]');
+  assert.ok(collapsed,'automation settings includes the thread default control');
+  assert.equal(collapsed.checked,true,'existing users default to collapsed branches');
+  assert.match(collapsed.closest('label').textContent,/楼中楼默认折叠/);
+  assert.match(dialog.textContent,/取消.*默认展开/);
+  const changes=[];
+  h.d.addEventListener('nsit:thread-default-changed',event=>{
+    changes.push({collapsed:event.detail.collapsed,saved:h.storage.get(settingsKey).threadDefaultCollapsed});
+  });
+  const save=()=>dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
+  save();assert.deepEqual(changes,[],'saving an unchanged default preserves manual branch state');
+  collapsed.checked=false;save();
+  assert.deepEqual(h.storage.get(settingsKey),{...settings,threadDefaultCollapsed:false});
+  assert.deepEqual(changes,[{collapsed:false,saved:false}],'current page is notified after successful storage');
+  save();assert.equal(changes.length,1,'repeated saves do not reset manually adjusted branches');
+  h.w.testApi.openSettings();assert.equal(collapsed.checked,false,'reopening settings retains the choice');
+  const later=setup(t,{storage:h.storage,url:'https://www.nodeseek.com/post-456-1'});
+  later.w.testApi.openSettings();
+  assert.equal(later.d.querySelector('[name="threadDefaultCollapsed"]').checked,false,'later pages load the saved default');
+  collapsed.checked=true;save();
+  assert.deepEqual(changes,[{collapsed:false,saved:false},{collapsed:true,saved:true}]);
+});
+
+test('thread default is not applied when reply validation or settings storage fails',t=>{
+  const h=setup(t);h.w.testApi.openSettings();
+  const dialog=h.d.querySelector('[data-nsit-auto-dialog]');
+  const collapsed=dialog.querySelector('[name="threadDefaultCollapsed"]');
+  assert.ok(collapsed,'thread default control exists');
+  let changes=0;h.d.addEventListener('nsit:thread-default-changed',()=>{changes+=1;});
+  collapsed.checked=false;dialog.querySelector('[name="autoReply"]').checked=true;
+  const save=()=>dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
+  save();assert.match(dialog.textContent,/请填写自定义回复语句/);assert.equal(changes,0);
+  assert.deepEqual(h.storage.get(settingsKey),{dailyCheckin:false});
+  dialog.querySelector('[name="autoReply"]').checked=false;
+  h.w.GM_setValue=()=>{throw new Error('storage unavailable');};
+  save();assert.match(dialog.textContent,/设置保存失败/);assert.equal(changes,0);
+  assert.deepEqual(h.storage.get(settingsKey),{dailyCheckin:false});
+});
+
 test('enabled lottery reply uses native submit once and does not require an API guess',async t=>{
   const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'感谢分享！'}});const runtime=h.install();
   await runtime.run();await runtime.run();

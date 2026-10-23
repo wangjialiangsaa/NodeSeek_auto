@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const file = path.join(__dirname, '../src/threaded.js');
-const source = fs.existsSync(file) ? `function featureEnabled(){return true;}\n${fs.readFileSync(file, 'utf8')}\ninstallThreadedReading();` : '';
+const automaticSource = fs.readFileSync(path.join(__dirname, '../src/auto-tasks.js'), 'utf8');
+const source = fs.existsSync(file) ? `function featureEnabled(){return true;}\n${automaticSource}\n${fs.readFileSync(file, 'utf8')}\ninstallThreadedReading();` : '';
 const pause = ms => new Promise(r => setTimeout(r, ms));
 const reply = (floor, body, author = `User${floor}`, style = '') => `<li class="content-item" id="${floor}" data-comment-id="${1000 + floor}" style="${style}"><div class="nsk-content-meta-info"><div class="avatar-wrapper"><img class="avatar-normal"></div><div><div class="author-info"><a class="author-name" href="/space/${floor}">${author}</a></div></div><div class="floor-link-wrapper"><a class="floor-link" href="#${floor}">#${floor}</a></div></div><article class="post-content">${body}</article><div class="comment-menu"><button class="native-reply">回复</button></div></li>`;
 const ref = (floor, topic = '123', page = 1) => `<a href="/member?t=User${floor}">@User${floor}</a> <a href="/post-${topic}-${page}#${floor}">#${floor}</a><br>`;
@@ -14,6 +15,8 @@ async function setup(t, cards, options = {}) {
   w.scrollTo = () => {};
   w.HTMLElement.prototype.scrollIntoView = () => {};
   const storage = options.storage || new Map();
+  if (options.defaultCollapsed === null) storage.delete('nsit-auto-settings-v1');
+  else storage.set('nsit-auto-settings-v1', { ...storage.get('nsit-auto-settings-v1'), threadDefaultCollapsed: options.defaultCollapsed === true });
   w.GM_getValue = (k, d) => storage.has(k) ? storage.get(k) : d;
   w.GM_setValue = (k, v) => storage.set(k, v);
   w.GM_registerMenuCommand = () => {};
@@ -601,4 +604,203 @@ test('floor navigation preserves explicit frame targets and download links', asy
     assert.equal(click.defaultPrevented,false,`${id} retains the action selected by its native attributes`);
     assert.equal(d.getElementById('1').classList.contains('nst-focus'),false);
   }
+});
+
+test('thread preferences collapse all branches when the setting is absent or enabled', async t => {
+  for(const defaultCollapsed of [null,true]) {
+    await t.test(defaultCollapsed===null?'missing settings':'enabled setting', async t => {
+      const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild') + reply(4,ref(1)+'sibling') + reply(5,'independent root'),{defaultCollapsed});
+      assert.deepEqual(hiddenFloors(d),[2,3,4]);
+      assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+      assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+      assert.equal(branchToggle(d,1).querySelector('.nst-branch-count').textContent.trim(),'另外 3 条回复');
+      branchToggle(d,1).click();
+      assert.deepEqual(hiddenFloors(d),[3],'nested branches also start folded');
+      assert.equal(d.getElementById('5').classList.contains('nst-branch-hidden'),false);
+    });
+  }
+});
+
+test('thread preferences keep existing and newly created branches expanded when disabled', async t => {
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child'),{defaultCollapsed:false});
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.deepEqual(hiddenFloors(d),[]);
+  d.querySelector('ul.comments').insertAdjacentHTML('beforeend',reply(3,ref(2)+'new grandchild'));
+  await pause(180);
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.deepEqual(hiddenFloors(d),[]);
+});
+
+test('thread preferences initialize new branches without refolding manually opened branches', async t => {
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child'),{defaultCollapsed:true});
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  branchToggle(d,1).click();
+  d.getElementById('2').querySelector('.post-content').append(' edited'); await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true','an ordinary DOM refresh retains the manual choice');
+  d.querySelector('ul.comments').insertAdjacentHTML('beforeend',reply(3,ref(2)+'new grandchild') + reply(4,ref(1)+'new sibling'));
+  await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false','a previous leaf adopts the default when it first gains a reply');
+  assert.deepEqual(hiddenFloors(d),[3]);
+  branchToggle(d,2).click();
+  d.querySelector('ul.comments').insertAdjacentHTML('beforeend',reply(5,ref(2)+'another grandchild'));
+  await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.deepEqual(hiddenFloors(d),[]);
+});
+
+test('thread preferences apply to newly loaded branches while preserving opened ancestors', async t => {
+  const { d, bottom } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child'),{defaultCollapsed:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,ref(2)+'new child')}${reply(12,ref(11)+'deep child')}${reply(13,'new root')}${reply(14,ref(13)+'new root child')}</ul>`})});
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  branchToggle(d,1).click(); bottom(); await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  for(const floor of [2,11,13]) assert.equal(branchToggle(d,floor).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[11,12,14]);
+  branchToggle(d,2).click();
+  assert.deepEqual(hiddenFloors(d),[12,14]);
+});
+
+test('thread preferences immediately apply saved changes to every current branch', async t => {
+  const { w, d, storage } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild') + reply(4,'other root') + reply(5,ref(4)+'other child'),{defaultCollapsed:false});
+  branchToggle(d,1).click();
+  storage.set('nsit-auto-settings-v1',{threadDefaultCollapsed:true});
+  d.dispatchEvent(new w.CustomEvent('nsit:thread-default-changed')); await pause(40);
+  for(const floor of [1,2,4]) assert.equal(branchToggle(d,floor).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[2,3,5]);
+  storage.set('nsit-auto-settings-v1',{threadDefaultCollapsed:false});
+  d.dispatchEvent(new w.CustomEvent('nsit:thread-default-changed')); await pause(40);
+  for(const floor of [1,2,4]) assert.equal(branchToggle(d,floor).getAttribute('aria-expanded'),'true');
+  assert.deepEqual(hiddenFloors(d),[]);
+});
+
+test('thread preferences changed in quote or raw mode take effect on returning to threads', async t => {
+  const { w, d, storage } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild'),{defaultCollapsed:false});
+  mode(d,'quote');
+  storage.set('nsit-auto-settings-v1',{threadDefaultCollapsed:true});
+  d.dispatchEvent(new w.CustomEvent('nsit:thread-default-changed')); await pause(40);
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(d.querySelector('.nst-branch-toggle'),null);
+  mode(d,'thread');
+  assert.deepEqual(hiddenFloors(d),[2,3]);
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+  mode(d,'raw');
+  storage.set('nsit-auto-settings-v1',{threadDefaultCollapsed:false});
+  d.dispatchEvent(new w.CustomEvent('nsit:thread-default-changed')); await pause(40);
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(d.querySelector('.nst-branch-toggle'),null);
+  mode(d,'thread');
+  assert.deepEqual(hiddenFloors(d),[]);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+});
+
+test('thread preferences preserve manual choices across modes and reapply them on a new page', async t => {
+  const { w, d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'grandchild'),{defaultCollapsed:true});
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  branchToggle(d,1).click();
+  assert.deepEqual(hiddenFloors(d),[3]);
+  for(const value of ['quote','raw']) {
+    mode(d,value);
+    assert.deepEqual(hiddenFloors(d),[]);
+    assert.equal(d.querySelector('.nst-branch-toggle'),null);
+    mode(d,'thread');
+    assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+    assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+    assert.deepEqual(hiddenFloors(d),[3]);
+  }
+  w.history.pushState({},'','/post-123-2'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(140);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[2,3]);
+});
+
+test('thread preferences reveal an initial hash once without undoing later manual folds', async t => {
+  const scrolls=[];
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(3,ref(2)+'target') + reply(4,'other root') + reply(5,ref(4)+'other child'),{defaultCollapsed:true,url:'https://www.nodeseek.com/post-123-1#3',init:w=>{
+    w.HTMLElement.prototype.scrollIntoView=function(){scrolls.push({floor:this.id,visible:!this.classList.contains('nst-branch-hidden') && w.getComputedStyle(this).display!=='none'});};
+  }});
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,2).getAttribute('aria-expanded'),'true');
+  assert.equal(branchToggle(d,4).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[5]);
+  assert.ok(scrolls.some(entry=>entry.floor==='3' && entry.visible),'the initial hash target is revealed before scrolling');
+  const initialScrollCount=scrolls.length;
+  branchToggle(d,1).click();
+  d.getElementById('4').querySelector('.post-content').append(' refreshed'); await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false');
+  assert.deepEqual(hiddenFloors(d),[2,3,5]);
+  assert.equal(scrolls.length,initialScrollCount,'ordinary refresh does not process the initial hash again');
+});
+
+test('thread presentation hides only floor links while retaining native badges and controls', async t => {
+  let link, wrapper, badge, clicked=0;
+  const { w, d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child'),{init:w=>{
+    wrapper=w.document.getElementById('1').querySelector('.floor-link-wrapper');
+    link=wrapper.querySelector('.floor-link');
+    badge=w.document.createElement('button'); badge.textContent='原生徽标'; badge.addEventListener('click',()=>clicked++); wrapper.append(badge);
+  }});
+  assert.equal(w.getComputedStyle(link).display,'none');
+  assert.notEqual(w.getComputedStyle(wrapper).display,'none');
+  assert.notEqual(w.getComputedStyle(badge).display,'none');
+  badge.click(); assert.equal(clicked,1);
+  for(const value of ['quote','raw']) {
+    mode(d,value);
+    assert.notEqual(w.getComputedStyle(link).display,'none');
+    assert.equal(d.getElementById('1').querySelector('.floor-link'),link);
+    assert.equal(link.getAttribute('href'),'#1');
+    mode(d,'thread');
+    assert.equal(w.getComputedStyle(link).display,'none');
+  }
+  w.history.pushState({},'','/categories/daily'); w.dispatchEvent(new w.PopStateEvent('popstate')); await pause(140);
+  assert.notEqual(w.getComputedStyle(link).display,'none');
+  badge.click(); assert.equal(clicked,2);
+});
+
+test('thread presentation retains parent authors and navigation without visible floor numbers', async t => {
+  const { d } = await setup(t,reply(1,'root') + reply(2,ref(1)+'child') + reply(11,ref(8)+'cross-page child'));
+  const local=d.getElementById('2').querySelector('.nst-relation a');
+  assert.equal(local.textContent,'回复 User1');
+  assert.equal(local.getAttribute('href'),'/post-123-1#1');
+  const remote=d.getElementById('11').querySelector('.nst-relation a');
+  assert.match(remote.textContent,/回复 User8/);
+  assert.doesNotMatch(remote.textContent,/#8/);
+  assert.equal(remote.getAttribute('href'),'/post-123-1#8');
+  assert.ok(d.getElementById('11').querySelector('.nst-relation button'),'unloaded parents retain their preview action');
+});
+
+test('pending floor navigation locates a later-page target when its parent was already opened', async t => {
+  const scrolls=[];
+  const { d, bottom } = await setup(t,reply(1,'root') + reply(2,ref(1)+'existing child'),{defaultCollapsed:true,url:'https://www.nodeseek.com/post-123-1#11',pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,ref(1)+'target')}</ul>`}),init:w=>{
+    w.HTMLElement.prototype.scrollIntoView=function(){scrolls.push({floor:this.id,visible:!this.classList.contains('nst-branch-hidden')});};
+  }});
+  assert.deepEqual(scrolls,[],'an absent target cannot be scrolled to yet');
+  branchToggle(d,1).click();
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  bottom(); await pause(180);
+  assert.ok(d.getElementById('11'));
+  assert.equal(d.getElementById('11').classList.contains('nst-branch-hidden'),false);
+  assert.deepEqual(scrolls,[{floor:'11',visible:true}],'the pending target is located even without another ancestor state change');
+  d.getElementById('1').querySelector('.post-content').append(' refreshed'); await pause(180);
+  assert.deepEqual(scrolls,[{floor:'11',visible:true}],'the resolved initial hash is not replayed on refresh');
+});
+
+test('pending floor navigation retains a later hashchange until its hidden target is loaded', async t => {
+  const scrolls=[];
+  const { w, d, bottom } = await setup(t,reply(1,'root') + reply(2,ref(1)+'existing child'),{defaultCollapsed:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,ref(1)+'target')}</ul>`}),init:w=>{
+    w.HTMLElement.prototype.scrollIntoView=function(){scrolls.push({floor:this.id,visible:!this.classList.contains('nst-branch-hidden')});};
+  }});
+  w.location.hash='#11'; await pause(140);
+  assert.deepEqual(scrolls,[]);
+  assert.equal(d.getElementById('11'),null);
+  bottom(); await pause(180);
+  assert.ok(d.getElementById('11'));
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'true');
+  assert.equal(d.getElementById('11').classList.contains('nst-branch-hidden'),false);
+  assert.deepEqual(scrolls,[{floor:'11',visible:true}]);
+  branchToggle(d,1).click();
+  d.getElementById('1').querySelector('.post-content').append(' refreshed'); await pause(180);
+  assert.equal(branchToggle(d,1).getAttribute('aria-expanded'),'false','a later manual fold stays closed');
+  assert.equal(d.getElementById('11').classList.contains('nst-branch-hidden'),true);
+  assert.deepEqual(scrolls,[{floor:'11',visible:true}],'the completed navigation is not replayed');
 });

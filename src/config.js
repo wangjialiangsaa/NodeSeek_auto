@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.66';
+  const VERSION = '1.4.67';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';

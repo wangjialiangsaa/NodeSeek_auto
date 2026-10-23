@@ -14,7 +14,7 @@
 
   function automaticTaskSettings() {
     const saved = autoTaskRead(AUTO_TASK_SETTINGS_KEY, {}) || {};
-    return { dailyCheckin: saved.dailyCheckin !== false, autoReply: saved.autoReply === true, replyText: typeof saved.replyText === 'string' ? saved.replyText.trim().slice(0, 500) : '' };
+    return { dailyCheckin: saved.dailyCheckin !== false, autoReply: saved.autoReply === true, replyText: typeof saved.replyText === 'string' ? saved.replyText.trim().slice(0, 500) : '', threadDefaultCollapsed: saved.threadDefaultCollapsed !== false };
   }
 
   function automaticTaskPageWindow() {
@@ -40,7 +40,7 @@
     if (!dialog) {
       injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
-      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
+      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
       const close = () => { dialog.hidden = true; };
       dialog.querySelector('[data-nsit-auto-close]').addEventListener('click', close);
@@ -48,11 +48,13 @@
       dialog.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
       dialog.querySelector('form').addEventListener('submit', event => {
         event.preventDefault();
-        const next = { dailyCheckin: dialog.querySelector('[name="dailyCheckin"]').checked, autoReply: dialog.querySelector('[name="autoReply"]').checked, replyText: dialog.querySelector('[name="replyText"]').value.trim() };
+        const next = { dailyCheckin: dialog.querySelector('[name="dailyCheckin"]').checked, autoReply: dialog.querySelector('[name="autoReply"]').checked, replyText: dialog.querySelector('[name="replyText"]').value.trim(), threadDefaultCollapsed: dialog.querySelector('[name="threadDefaultCollapsed"]').checked };
         const message = dialog.querySelector('[data-nsit-auto-message]');
         if (next.autoReply && !next.replyText) { message.textContent = '请填写自定义回复语句'; return; }
         try {
+          const previousDefault = automaticTaskSettings().threadDefaultCollapsed;
           autoTaskWrite(AUTO_TASK_SETTINGS_KEY, next); message.textContent = '已保存';
+          if (previousDefault !== next.threadDefaultCollapsed) document.dispatchEvent(new CustomEvent('nsit:thread-default-changed', { detail: { collapsed: next.threadDefaultCollapsed } }));
           automaticTaskPageWindow()[AUTO_TASK_RUNTIME_KEY]?.schedule();
         } catch (_) { message.textContent = '设置保存失败，请检查浏览器存储'; }
       });
@@ -61,6 +63,7 @@
     dialog.querySelector('[name="dailyCheckin"]').checked = settings.dailyCheckin;
     dialog.querySelector('[name="autoReply"]').checked = settings.autoReply;
     dialog.querySelector('[name="replyText"]').value = settings.replyText;
+    dialog.querySelector('[name="threadDefaultCollapsed"]').checked = settings.threadDefaultCollapsed;
     dialog.querySelector('[data-nsit-auto-message]').textContent = '';
     dialog.hidden = false; updateAutomaticTaskStatus();
     dialog.querySelector('[data-nsit-auto-close]').focus();

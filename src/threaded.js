@@ -26,6 +26,7 @@ function installThreadedReading() {
     ul.comments.nst-thread > li .content-info { margin:0; font-size:12px; }
     ul.comments.nst-thread > li .nsit-author-info { order:1; flex-basis:100%; margin:0; }
     ul.comments.nst-thread > li .floor-link-wrapper { margin-inline-start:auto; }
+    ul.comments.nst-thread > li .floor-link { display:none !important; }
     ul.comments.nst-thread > li > .post-content,ul.comments.nst-thread > li > .comment-menu,
     ul.comments.nst-thread > li > .signature,ul.comments.nst-thread > li > .topic-warning,
     ul.comments.nst-thread > li > .nst-relation,ul.comments.nst-thread > li > .nst-auto-quote { margin-inline-start:calc(var(--nst-avatar) + var(--nst-gap)); }
@@ -406,7 +407,7 @@ function installThreadedReading() {
       post.card.classList.toggle('nst-branch-collapsed', post.folded && post.descendants > 0);
       if (!post.toggle) continue;
       post.toggle.setAttribute('aria-expanded', String(!post.folded));
-      const label = `${post.folded ? '展开' : '收起'} #${post.floor} 下的 ${post.descendants} 条回复`;
+      const label = `${post.folded ? '展开' : '收起'} ${post.author || '这条评论'} 下的 ${post.descendants} 条回复`;
       post.toggle.setAttribute('aria-label', label); post.toggle.title = label;
       post.count.hidden = !post.folded;
     }
@@ -440,15 +441,22 @@ function installThreadedReading() {
     return changed;
   }
   function revealHash() {
-    if (!/^#\d+$/.test(location.hash)) return;
-    const floor = Number(location.hash.slice(1));
-    if (revealFloor(floor)) state.posts.get(floor).card.scrollIntoView({ block:'center', behavior:'auto' });
+    const s = state;
+    if (!s) return;
+    s.pendingHash = /^#\d+$/.test(location.hash) ? location.hash : '';
+    if (!s.pendingHash || mode !== 'thread') return;
+    const post = s.posts.get(Number(s.pendingHash.slice(1)));
+    if (!post) return;
+    s.pendingHash = '';
+    revealFloor(post.floor);
+    post.card.scrollIntoView({ block:'center', behavior:'auto' });
   }
   function anchor(s) {
     return [...s.list.children].filter(n => n.matches('li.content-item:not(.nst-branch-hidden)')).sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
       .find(n => n.getBoundingClientRect().bottom > 100);
   }
   function jump(card) {
+    if (state) state.pendingHash = '';
     revealFloor(card.id);
     card.scrollIntoView({ block:'center', behavior:'auto' });
     card.classList.remove('nst-focus');
@@ -487,7 +495,7 @@ function installThreadedReading() {
     if (!ref) return;
     const row = el('div', 'nst-relation');
     const name = parent?.author || ref.author;
-    const link = el('a', '', `回复 ${name ? `${name} · ` : ''}#${ref.parent}${parent ? '' : '（跨页或未加载）'}`);
+    const link = el('a', '', `回复 ${name || '此前评论'}${parent ? '' : '（跨页或未加载）'}`);
     link.href = ref.href;
     if (parent) link.addEventListener('click', event => {
       if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -688,7 +696,7 @@ function installThreadedReading() {
       if (state && (state.topic !== current.topic || state.page !== current.page || state.list !== list)) cleanup();
       if (!state) {
         const stored = read(`page:${current.topic}:${current.page}`, null);
-        state = { ...current, list, posts:new Map(), collapsed:new Set(), known:new Set(Array.isArray(stored?.known) ? stored.known.filter(Number.isSafeInteger) : []), pending:new Set(Array.isArray(stored?.pending) ? stored.pending.filter(Number.isSafeInteger) : []), visited:Array.isArray(stored?.known), maxPage:current.page };
+        state = { ...current, list, posts:new Map(), collapsed:new Set(), initializedBranches:new Set(), defaultCollapsed:automaticTaskSettings().threadDefaultCollapsed, pendingHash:location.hash, known:new Set(Array.isArray(stored?.known) ? stored.known.filter(Number.isSafeInteger) : []), pending:new Set(Array.isArray(stored?.pending) ? stored.pending.filter(Number.isSafeInteger) : []), visited:Array.isArray(stored?.known), maxPage:current.page };
         makeBar(state); setupLoading(state); resize?.observe(list);
       }
       const s = state;
@@ -723,6 +731,11 @@ function installThreadedReading() {
       for (let i = sorted.length - 1; i >= 0; i--) {
         const post = sorted[i], parent = post.ref && s.posts.get(post.ref.parent);
         if (parent) parent.descendants += 1 + post.descendants;
+      }
+      for (const post of sorted) {
+        if (!post.descendants || s.initializedBranches.has(post.floor)) continue;
+        s.initializedBranches.add(post.floor);
+        if (s.defaultCollapsed) s.collapsed.add(post.floor);
       }
       list.classList.toggle('nst-thread', mode === 'thread');
       let rank = 1;
@@ -762,6 +775,9 @@ function installThreadedReading() {
         if (Math.abs(delta) > 1) window.scrollTo({ top:window.scrollY + delta, behavior:'auto' });
       }
       updateFrame(false);
+      // Resolve a direct comment link once, including a target arriving on a later page.
+      // Refreshing author info or loading replies must not undo a later manual fold.
+      if (mode === 'thread' && /^#\d+$/.test(s.pendingHash) && s.posts.has(Number(s.pendingHash.slice(1)))) revealHash();
     } finally { observe(); }
   }
   function schedule() { clearTimeout(timer); timer = setTimeout(refresh,80); }
@@ -785,6 +801,17 @@ function installThreadedReading() {
   window.addEventListener('resize',scheduleFrame,{ passive:true });
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
   document.addEventListener('nsit:reveal-floor', event => revealFloor(event.detail?.floor));
+  document.addEventListener('nsit:thread-default-changed', () => {
+    const s = state;
+    if (!s) return;
+    const next = automaticTaskSettings().threadDefaultCollapsed;
+    if (next === s.defaultCollapsed) return;
+    s.defaultCollapsed = next;
+    s.collapsed.clear();
+    if (next) for (const post of s.posts.values()) if (post.descendants) s.collapsed.add(post.floor);
+    applyBranchState(s);
+    updateFrame(false);
+  });
   document.addEventListener('click', event => {
     const action=event.target.closest?.('.comment-menu .menu-item,.comment-menu button');
     if(action && /^(回复|引用|编辑)$/.test(action.textContent.trim())) openEditor(state,true);

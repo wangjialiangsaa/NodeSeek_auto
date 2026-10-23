@@ -5,14 +5,14 @@ const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const card=(floor,body)=>`<li class="content-item" id="${floor}" data-comment-id="${1000+floor}"><div class="nsk-content-meta-info"><div class="avatar-wrapper"><img class="avatar-normal"></div><a class="author-name">User${floor}</a><a class="floor-link" href="#${floor}">#${floor}</a></div><article class="post-content">${body}</article><div class="comment-menu"><button>回复</button></div></li>`;
-async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,flags={}}={}) {
+async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,flags={},settings={threadDefaultCollapsed:false}}={}) {
   const dom=new JSDOM(`<html><head></head><body><header id="nsk-head"></header><main><ul class="comments">${card(1,'root')}${card(2,'<p><a href="/member?t=User1">@User1</a> <a href="/post-123-1#1">#1</a><br>child</p>')}</ul><div class="post-bottom-pager"><nav aria-label="pagination"><a rel="next" href="/post-123-2">下一页</a></nav></div><div id="editor"><div class="md-editor"><div id="editor-body"><div class="window_header"><a href="https://www.runoob.com/markdown/md-tutorial.html">Markdown</a></div><div class="CodeMirror"></div></div><div class="topic-select"><button class="submit">发布评论</button></div></div></div></main></body></html>`,{url,runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,d=w.document,menus=new Map(),intersections=[];
   d.body.insertAdjacentHTML('afterbegin','<aside id="nsk-right-panel-container"><div class="user-stat"><div class="stat-block"><div data-v-native><a data-v-native href="/progress"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>等级 Lv 5</span></a></div></div><div class="stat-block"><div data-v-native><a data-v-native href="/my-post"><svg data-v-native class="iconpark-icon"></svg><span data-v-native>主题帖 153</span></a></div></div></div></aside>');
   const observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver{constructor(callback){super(callback);observers.push(this);}};
   t.after(()=>{w.__nodeSeekAuthorInfo__?.disconnect();observers.forEach(o=>o.disconnect());w.close();});
-  const storage=new Map();
+  const storage=new Map([['nsit-auto-settings-v1',settings]]);
   w.GM_getValue=(key,fallback)=>storage.has(key)?storage.get(key):fallback;
   w.GM_setValue=(key,value)=>storage.set(key,value);
   w.GM_registerMenuCommand=(name,fn)=>menus.set(name,fn);
@@ -31,10 +31,34 @@ async function setup(t,file,{url='https://www.nodeseek.com/post-123-1',fetch,fla
   const editor=d.getElementById('editor');
   w.eval(fs.readFileSync(path.join(__dirname,'..',file),'utf8'));
   await pause(180);
-  return {w,d,editor,cm,menus,bottom(){for(const o of intersections)if(o.target)o.callback([{target:o.target,isIntersecting:true}]);}};
+  return {w,d,editor,cm,menus,storage,bottom(){for(const o of intersections)if(o.target)o.callback([{target:o.target,isIntersecting:true}]);}};
 }
 
 for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.min.user.js']) {
+  test(`${file}: automation settings apply default folding immediately and preserve manual choices on unrelated saves`,async t=>{
+    const {w,d,storage}=await setup(t,file,{settings:{}});
+    const child=d.getElementById('2');
+    assert.equal(child.classList.contains('nst-branch-hidden'),true,'existing settings without a preference default to folded');
+    assert.equal(w.getComputedStyle(d.getElementById('1').querySelector('.floor-link')).display,'none');
+    d.querySelector('[data-nsit-automation-trigger]').click();
+    const dialog=d.querySelector('[data-nsit-auto-dialog]'),input=dialog.querySelector('[name="threadDefaultCollapsed"]');
+    assert.ok(input);assert.equal(input.checked,true);
+    const save=()=>dialog.querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+    input.checked=false;save();await pause(150);
+    assert.equal(storage.get('nsit-auto-settings-v1').threadDefaultCollapsed,false);
+    assert.equal(child.classList.contains('nst-branch-hidden'),false);
+    d.getElementById('1').querySelector('.nst-branch-toggle').click();save();await pause(150);
+    assert.equal(child.classList.contains('nst-branch-hidden'),true,'saving unchanged defaults does not reset a manual fold');
+    d.getElementById('1').querySelector('.nst-branch-toggle').click();
+    input.checked=true;save();await pause(150);
+    assert.equal(storage.get('nsit-auto-settings-v1').threadDefaultCollapsed,true);
+    assert.equal(child.classList.contains('nst-branch-hidden'),true);
+    d.querySelector('[data-nst-mode="raw"]').click();
+    assert.equal(child.classList.contains('nst-branch-hidden'),false);
+    assert.notEqual(w.getComputedStyle(d.getElementById('1').querySelector('.floor-link')).display,'none');
+    d.querySelector('[data-nst-mode="thread"]').click();
+    assert.equal(child.classList.contains('nst-branch-hidden'),true);
+  });
   test(`${file}: templates, threaded reading and native editor coexist`,async t=>{
     const {d,editor,cm,menus}=await setup(t,file);
     assert.ok(d.querySelector('.nsit-trigger'));
