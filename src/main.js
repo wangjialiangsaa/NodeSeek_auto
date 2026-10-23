@@ -609,12 +609,14 @@
   }
 
   const threadedReading = installThreadedReading();
+  const homeFeedLoading = installHomeFeedLoading();
   injectBaseStyles();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
   const authorInfo = installAuthorInfo();
   const observer = new MutationObserver(() => {
+    homeFeedLoading.refresh();
     automaticTasks.schedule();
     authorInfo.schedule();
     renderLuckyTrigger();

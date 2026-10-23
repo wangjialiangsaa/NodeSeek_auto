@@ -127,6 +127,7 @@
   // 开关变化后按新状态重画各处界面：这些渲染函数都是幂等的，开着会补上、关掉会移除。
   function applyFeatureFlags() {
     threadedReading.refresh();
+    homeFeedLoading.refresh();
     const app = document.querySelector(`#${APP_ID}`);
     if (app) applyEditorFeatureFlags(app);
     renderLuckyTrigger();

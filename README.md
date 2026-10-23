@@ -6,11 +6,11 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.69**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.70**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
-脚本在 NodeSeek 各页面提供对应功能：发帖与编辑页有“出🐔模板”“收🐔模板”和“🎁 抽奖配置”，帖子页有楼中楼、自动续页、固定回复栏、抽奖跟踪、交易状态与「我的回复」，列表页有关键字过滤。
+脚本在 NodeSeek 各页面提供对应功能：发帖与编辑页有“出🐔模板”“收🐔模板”和“🎁 抽奖配置”，帖子页有楼中楼、自动续页、固定回复栏、抽奖跟踪、交易状态与「我的回复」，列表页有关键字过滤，主页支持下滑自动续页。
 
 ## 界面
 
@@ -51,6 +51,12 @@
 面向收机场景的轻量表单，填目标机器和收购条件即可生成收购帖。
 
 ## 功能
+
+### 主页自动加载
+
+默认开启，仅在主页（`/` 或 `/page-N`）接近列表底部时自动加载下一页，去除重复帖子，直到末页；沿用当前“新帖子 / 新评论”排序。新加载的帖子同样参与现有过滤和“已回复”标记。
+
+上方手动分页入口保留，底部页码隐藏。加载失败时保留已有列表，稍后继续下滑即可重试；可在油猴“功能开关 → 主页自动加载”关闭并恢复底部分页。
 
 ### 图片上传
 
