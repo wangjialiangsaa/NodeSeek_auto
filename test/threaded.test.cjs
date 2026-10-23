@@ -301,7 +301,7 @@ test('scrolling to the end loads the next page once, deduplicates pins and joins
   assert.equal(d.getElementById('11').classList.contains('nst-new'),false);
   assert.equal(d.getElementById('11').querySelector('.floor-link').getAttribute('href'),'/post-123-2#11');
   bottom(); await pause(30); assert.equal(calls,1);
-  assert.match(d.querySelector('.nst-auto-load').textContent,/全部|末尾/);
+  assert.match(d.querySelector('.nst-auto-load').textContent,/末页.*已加载/);
 });
 
 test('loading failure keeps existing comments and can retry on a later scroll', async t => {
@@ -394,6 +394,144 @@ test('reuses native menus with the imported metadata index and releases them on 
   assert.equal(destroyed,1);assert.equal(w.__config__.postData.comments.length,1);
   assert.equal(d.getElementById('editor').classList.contains('nst-fixed-editor'),false);
   assert.equal(d.querySelector('.draft').value,'未写完的草稿');
+});
+
+test('base64 page metadata keeps native likes and chicken actions with the imported index without executing scripts', async t => {
+  const imported={floorIndex:11,commentId:1011,poster:{name:'中文用户😺'},markdown:'中文与 emoji 🚀，引号 " 和反斜线 \\',time:{createdDate:'2026-10-23',editedDate:null}};
+  const encoded=Buffer.from(JSON.stringify({postData:{postId:123,comments:[imported]}}),'utf8').toString('base64');
+  const actions=[];
+  const {w,d,bottom}=await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><script id="temp-script" type="text/plain">\n${encoded}\n</script><script>window.remoteScriptExecuted=true;window.__config__=JSON.parse(b64DecodeUnicode(document.getElementById('temp-script').textContent));</script>`}),init:w=>{
+    w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+    class Menu {
+      setIndex(index){this.index=index;}
+      $mount(node){
+        this.$el=w.document.createElement('div');this.$el.className='comment-menu';
+        for(const label of ['点赞','鸡腿','引用','回复']) {
+          const button=w.document.createElement('button');button.textContent=label;
+          button.addEventListener('click',()=>actions.push({label,index:this.index,commentId:w.__config__.postData.comments[this.index].commentId}));
+          this.$el.append(button);
+        }
+        node.replaceWith(this.$el);
+      }
+      $destroy(){}
+    }
+    w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+  }});
+  bottom();await pause(180);
+  const card=d.getElementById('11');assert.ok(card);
+  assert.equal(w.remoteScriptExecuted,undefined,'remote inline scripts are data only');
+  assert.equal(w.__config__.postData.comments[1].poster.name,imported.poster.name);
+  assert.equal(w.__config__.postData.comments[1].markdown,imported.markdown);
+  assert.equal(card.querySelector('.nst-loaded-menu'),null,'complete metadata uses the native menu');
+  assert.deepEqual([...card.querySelectorAll('.comment-menu button')].map(b=>b.textContent),['点赞','鸡腿','引用','回复']);
+  card.querySelectorAll('.comment-menu button').forEach(button=>button.click());
+  assert.deepEqual(actions,['点赞','鸡腿','引用','回复'].map(label=>({label,index:1,commentId:1011})));
+});
+
+test('base64 menu reuse checks later native menu candidates when the first menu is unavailable', async t => {
+  const imported={floorIndex:11,commentId:1011,poster:{name:'Imported'},markdown:'loaded'};
+  const encoded=Buffer.from(JSON.stringify({postData:{postId:123,comments:[imported]}})).toString('base64');
+  let mounted=0,destroyed=0;
+  const {d,bottom}=await setup(t,reply(1,'first')+reply(2,'second')+reply(3,'third'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><div id="temp-script" hidden>${encoded}</div>`}),init:w=>{
+    w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001},{floorIndex:2,commentId:1002},{floorIndex:3,commentId:1003}]}};
+    class BrokenMenu {setIndex(){throw new Error('unavailable candidate');}$mount(){}$destroy(){destroyed+=1;}}
+    class Menu {
+      setIndex(index){assert.equal(index,3);}
+      $mount(node){mounted+=1;node.className='comment-menu';node.textContent='点赞 鸡腿 引用 回复';}
+      $destroy(){}
+    }
+    w.document.getElementById('2').querySelector('.comment-menu').__vue__={constructor:BrokenMenu,$options:{}};
+    w.document.getElementById('3').querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+  }});
+  bottom();await pause(180);
+  assert.equal(mounted,1);assert.equal(destroyed,1);assert.equal(d.getElementById('11').querySelector('.nst-loaded-menu'),null);
+});
+
+test('invalid base64 metadata can use the existing JSON.parse data format without running surrounding code', async t => {
+  const imported={floorIndex:11,commentId:1011,poster:{name:'JSON用户'},markdown:'原始内容'};
+  const jsonString=JSON.stringify(JSON.stringify({postData:{postId:123,comments:[imported]}}));
+  let mounted=0;
+  const {w,d,bottom}=await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><div id="temp-script" hidden>invalid!base64</div><script>window.__config__=JSON.parse(${jsonString});window.remoteScriptExecuted=true;</script>`}),init:w=>{
+    w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+    class Menu {setIndex(index){assert.equal(index,1);}$mount(node){mounted+=1;node.className='comment-menu';}$destroy(){}}
+    w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+  }});
+  bottom();await pause(180);
+  assert.equal(mounted,1);assert.equal(w.remoteScriptExecuted,undefined);
+  assert.equal(w.__config__.postData.comments[1].poster.name,'JSON用户');
+  assert.equal(d.getElementById('11').querySelector('.nst-loaded-menu'),null);
+});
+
+test('native menu failures destroy temporary instances and leave attached fallback actions', async t => {
+  for(const phase of ['setIndex','mount']) await t.test(phase,async t=>{
+    const imported={floorIndex:11,commentId:1011,poster:{name:'Imported'},markdown:'loaded'};
+    let destroyed=0;
+    const {d,bottom}=await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><script>window.__config__=${JSON.stringify({postData:{postId:123,comments:[imported]}})};</script>`}),init:w=>{
+      w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+      class Menu {
+        setIndex(){if(phase==='setIndex')throw new Error('unavailable state');}
+        $mount(node){this.$el=w.document.createElement('div');this.$el.className='partial-native-menu';node.replaceWith(this.$el);throw new Error('mount failed after replacing the root');}
+        $destroy(){destroyed+=1;}
+      }
+      w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+    }});
+    bottom();await pause(180);
+    assert.equal(destroyed,1,'failed instances release listeners and watchers');
+    const card=d.getElementById('11'),fallback=card.querySelector('.nst-loaded-menu');
+    assert.ok(fallback?.isConnected,'fallback remains in the imported comment after root replacement');
+    assert.equal(card.querySelector('.partial-native-menu'),null);
+    assert.deepEqual([...fallback.querySelectorAll('button,a')].map(n=>n.textContent),['引用','回复','原页操作']);
+  });
+});
+
+test('base64 metadata with an unrelated post or invalid comments safely falls back without mounting', async t => {
+  for(const postData of [{postId:999,comments:[{floorIndex:11,commentId:1011}]},{postId:123,comments:{}},{postId:123,comments:[{floorIndex:11,commentId:9999}]}]) {
+    const encoded=Buffer.from(JSON.stringify({postData})).toString('base64');
+    let mounted=0;
+    const {d,bottom}=await setup(t,reply(1,'root'),{pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><div id="temp-script" hidden>${encoded}</div>`}),init:w=>{
+      w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+      class Menu {setIndex(){}$mount(){mounted+=1;}$destroy(){}}
+      w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+    }});
+    bottom();await pause(180);
+    assert.equal(mounted,0);assert.ok(d.getElementById('11').querySelector('.nst-loaded-menu'));
+  }
+});
+
+test('retained imported actions rebind after the native comments array is replaced or reordered', async t => {
+  for(const native of [true,false]) for(const change of ['replace','splice']) await t.test(`${native?'native':'fallback'} ${change}`,async t=>{
+    const imported={floorIndex:11,commentId:1011,poster:{name:'Imported'},markdown:'loaded'};
+    const encoded=Buffer.from(JSON.stringify({postData:{postId:123,comments:[imported]}})).toString('base64');
+    const actions=[];let mounted=0,destroyed=0;
+    const {w,d,bottom}=await setup(t,reply(1,'root'),{editor:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul><div id="temp-script" hidden>${encoded}</div>`}),init:w=>{
+      w.__config__={postData:{postId:123,comments:[{floorIndex:1,commentId:1001}]}};
+      const act=(label,index)=>actions.push({label,floor:w.__config__.postData.comments[index]?.floorIndex});
+      w.editor={reply:index=>act('回复',index),quote:index=>act('引用',index)};
+      if(native) {
+        class Menu {
+          setIndex(index){this.index=index;}
+          $mount(node){mounted+=1;this.$el=node;node.className='comment-menu';for(const label of ['点赞','鸡腿','引用','回复']){const button=w.document.createElement('button');button.textContent=label;button.onclick=()=>act(label,this.index);node.append(button);}}
+          $destroy(){destroyed+=1;}
+        }
+        w.document.querySelector('.comment-menu').__vue__={constructor:Menu,$options:{}};
+      }
+    }});
+    bottom();await pause(180);
+    const card=d.getElementById('11');assert.ok(card);
+    const before=w.__config__.postData.comments;
+    if(change==='replace')w.__config__.postData.comments=[{floorIndex:1,commentId:1001},{floorIndex:12,commentId:1012}];
+    else before.splice(1,0,{floorIndex:12,commentId:1012});
+    d.getElementById('1').querySelector('.post-content').append(' native update');await pause(150);
+    card.querySelectorAll('.comment-menu button').forEach(button=>button.click());
+    assert.ok(actions.length>=2);assert.ok(actions.every(action=>action.floor===11),JSON.stringify(actions));
+    assert.equal(w.__config__.postData.comments.filter(record=>record.floorIndex===11).length,1,'metadata is not duplicated while rebinding');
+    if(native){assert.equal(mounted,2);assert.equal(destroyed,1);}
+    d.getElementById('1').querySelector('.post-content').append(' unrelated update');await pause(150);
+    if(native){assert.equal(mounted,2,'unchanged metadata preserves the active component');assert.equal(destroyed,1);}
+    w.history.pushState({},'','/categories/daily');w.dispatchEvent(new w.PopStateEvent('popstate'));await pause(150);
+    if(native)assert.equal(destroyed,2,'cleanup only destroys the current binding once');
+    assert.equal(w.__config__.postData.comments.some(record=>record.floorIndex===11),false,'cleanup removes the currently registered metadata');
+  });
 });
 
 test('branch folding preserves independent nested state and native reply and quote handlers', async t => {

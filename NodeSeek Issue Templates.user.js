@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.67
+// @version      1.4.68
 // @description  NodeSeek 交易模板、图片上传、楼中楼与固定回复栏，提供折叠工具菜单、抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.67';
+  const VERSION = '1.4.68';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -7094,6 +7094,7 @@ function installThreadedReading() {
   }
   function dockEditor(s) {
     if (s.editor?.isConnected) return;
+    s.editorResize?.disconnect(); s.editorHeader?.remove(); s.editorSpacer?.remove();
     const editor = document.getElementById('editor');
     if (!editor?.querySelector('.md-editor')) return;
     s.editor = editor; s.editorStyle = editor.getAttribute('style');
@@ -7127,6 +7128,15 @@ function installThreadedReading() {
   }
   // Read data only; never execute scripts contained in a fetched page.
   function pageConfig(doc) {
+    const valid = value => value?.postData && /^\d+$/.test(String(value.postData.postId)) && Array.isArray(value.postData.comments);
+    const encoded=doc.getElementById('temp-script')?.textContent.trim();
+    if(encoded) {
+      try {
+        const json=decodeURIComponent(Array.from(atob(encoded),c=>`%${c.charCodeAt(0).toString(16).padStart(2,'0')}`).join(''));
+        const value=JSON.parse(json);
+        if(valid(value)) return value;
+      } catch { /* Invalid encoded data can still have a supported JSON alternative below. */ }
+    }
     for (const script of doc.querySelectorAll('script')) {
       const text = script.textContent.trim();
       const assignment = text.match(/(?:window\.)?__config__\s*=\s*/);
@@ -7135,7 +7145,7 @@ function installThreadedReading() {
         if (!assignment && script.type !== 'application/json') continue;
         if (tail.startsWith('JSON.parse(')) {
           const token = tail.slice(11).match(/^\s*("(?:\\.|[^"\\])*")\s*\)/);
-          if (token) { const value=JSON.parse(JSON.parse(token[1])); if(value?.postData) return value; }
+          if (token) { const value=JSON.parse(JSON.parse(token[1])); if(valid(value)) return value; }
         }
         if (tail[0] !== '{') continue;
         let depth=0, quoted=false, escaped=false;
@@ -7144,7 +7154,7 @@ function installThreadedReading() {
           if (quoted) { if(escaped) escaped=false; else if(c==='\\') escaped=true; else if(c==='"') quoted=false; }
           else if(c==='"') quoted=true;
           else if(c==='{') depth++;
-          else if(c==='}' && --depth===0) { const value=JSON.parse(tail.slice(0,i+1)); if(value?.postData) return value; break; }
+          else if(c==='}' && --depth===0) { const value=JSON.parse(tail.slice(0,i+1)); if(valid(value)) return value; break; }
         }
       } catch { /* A different encoding uses the safe DOM-derived reply fallback. */ }
     }
@@ -7171,27 +7181,63 @@ function installThreadedReading() {
     const floorLink=card.querySelector('.floor-link');
     if(floorLink) floorLink.setAttribute('href',`/post-${topic}-${page}#${card.id}`);
   }
+  function releaseLoadedMenu(s, card) {
+    const binding=s.importedMenus?.get(card);
+    if(!binding) return;
+    s.importedMenus.delete(card);
+    if(binding.menu) {
+      s.nativeMenus=s.nativeMenus.filter(menu=>menu!==binding.menu);
+      try { binding.menu.$destroy?.(); } catch { /* A discarded component must not block the retained conversation. */ }
+    }
+  }
+  function refreshLoadedMenus(s) {
+    const data=pageWindow().__config__?.postData;
+    const comments=String(data?.postId)===s.topic && Array.isArray(data.comments)?data.comments:null;
+    for(const card of s.imported.values()) {
+      const binding=s.importedMenus?.get(card);
+      if(binding && (binding.comments!==comments || (binding.index>=0 && comments?.[binding.index]!==binding.record))) mountLoadedMenu(s,card,binding.config);
+    }
+  }
   function mountLoadedMenu(s, card, config) {
+    releaseLoadedMenu(s,card);
+    s.importedMenus ||= new Map();
     const page=pageWindow(), data=page.__config__?.postData;
     const floor=Number(card.id), id=Number(card.dataset.commentId);
-    const actual = String(config?.postData?.postId)===s.topic && config.postData.comments?.find(p=>Number(p.floorIndex)===floor && Number(p.commentId)===id);
+    const validId=Number.isSafeInteger(floor) && floor>0 && Number.isSafeInteger(id) && id>0;
+    const actual = validId && String(config?.postData?.postId)===s.topic && Array.isArray(config.postData.comments) && config.postData.comments.find(p=>p && Number(p.floorIndex)===floor && Number(p.commentId)===id);
     const body=card.querySelector('article.post-content');
     const record=actual || { floorIndex:floor,commentId:id,poster:{name:card.querySelector('.author-name')?.textContent.trim() || `#${floor}`,isMe:false},markdown:excerpt(body,20000),time:{createdDate:card.querySelector('time')?.getAttribute('datetime') || '',editedDate:null} };
     let index=-1;
-    if(data && String(data.postId)===s.topic && Array.isArray(data.comments)) {
-      index=data.comments.findIndex(p=>Number(p.commentId)===id && Number(p.floorIndex)===floor);
-      if(index<0) { index=data.comments.length; data.comments.push(record); s.registered.push(record); }
+    const comments=String(data?.postId)===s.topic && Array.isArray(data.comments)?data.comments:null;
+    if(validId && comments) {
+      s.registered=s.registered.filter(registered=>comments.includes(registered));
+      index=comments.findIndex(p=>p && Number(p.commentId)===id && Number(p.floorIndex)===floor);
+      if(index<0) { index=comments.length; comments.push(record); s.registered.push(record); }
     }
+    const binding={config,comments,record:index>=0?comments[index]:null,index,menu:null};
+    s.importedMenus.set(card,binding);
     const old=card.querySelector('.comment-menu,.comment-menu-mount');
     const mount=el('div'); if(old) old.replaceWith(mount); else card.append(mount);
     if(actual && index>=0) {
-      try {
-        const native=[...page.document.querySelectorAll('.comment-menu')].find(n=>!n.closest('[data-nst-loaded]'))?.__vue__;
-        if(native?.constructor && native.$options) {
-          const menu=new native.constructor({...native.$options,el:undefined,parent:undefined});
-          menu.setIndex(index); menu.$mount(mount); s.nativeMenus.push(menu); return;
+      const candidates=[...page.document.querySelectorAll('.comment-menu')].filter(n=>!n.closest('[data-nst-loaded]'));
+      for(const candidate of candidates) {
+        let menu;
+        try {
+          const native=candidate.__vue__;
+          if(typeof native?.constructor!=='function' || !native.$options) continue;
+          menu=new native.constructor({...native.$options,el:undefined,parent:undefined});
+          if(typeof menu.setIndex!=='function' || typeof menu.$mount!=='function') throw new Error('菜单接口不可用');
+          menu.setIndex(index); menu.$mount(mount);
+          if(!card.contains(menu.$el || mount)) throw new Error('菜单未挂载到评论');
+          binding.menu=menu; s.nativeMenus.push(menu); return;
+        } catch {
+          // Vue may replace its mount node before failing; release it and restore the fallback slot.
+          try { menu?.$destroy?.(); } catch { /* A broken component must not stop fallback actions. */ }
+          if(menu?.$el!==mount && card.contains(menu?.$el || null)) menu.$el.replaceWith(mount);
+          else if(!card.contains(mount)) card.append(mount);
+          mount.replaceChildren();
         }
-      } catch { /* Fall back to native editor entry points and an original-page link. */ }
+      }
     }
     mount.className='comment-menu nst-loaded-menu';
     for(const [action,label] of [['quote','引用'],['reply','回复']]) {
@@ -7214,13 +7260,19 @@ function installThreadedReading() {
     original.target='_blank'; original.rel='noopener'; original.title='打开原页进行点赞、加鸡腿等操作'; mount.append(original);
   }
   function loadingStatus(s) {
-    s.loader.textContent=s.loading?'正在加载下一页…':s.loadError?'加载失败，稍后继续下滑自动重试':s.nextURL?'继续下滑，自动加载下一页':'已到末尾，全部评论已加载';
+    const restoring=s.restorePages.length>0;
+    s.loader.textContent=s.loading?(restoring?'正在恢复前面的对话…':'正在加载下一页…'):s.loadError?(restoring?'对话恢复失败，稍后继续下滑自动重试':'加载失败，稍后继续下滑自动重试'):s.nextURL?'继续下滑，自动加载下一页':'已到末页，当前阅读范围已加载';
     s.loader.title=s.loadError || '';
   }
+  function placeImportedCard(s,card) {
+    const next=[...s.list.children].find(node=>node.matches('li.content-item') && /^\d+$/.test(node.id) && Number(node.id)>Number(card.id));
+    if(next) next.before(card); else s.list.append(card);
+  }
   async function loadNext(s) {
-    if(state!==s || s.loading || !s.nextURL || Date.now() < s.retryAfter) return;
+    if(state!==s || s.loading || (!s.restorePages.length && !s.nextURL) || Date.now() < s.retryAfter) return;
     s.loading=true; s.loadError=''; loadingStatus(s);
-    const url=s.nextURL, page=Number(url.match(/post-\d+-(\d+)/)[1]);
+    const restoring=s.restorePages.length>0;
+    const url=restoring?`/post-${s.topic}-${s.restorePages[0]}`:s.nextURL, page=Number(url.match(/post-\d+-(\d+)/)[1]);
     const controller=new AbortController(); s.loadController=controller;
     const timeout=setTimeout(()=>controller.abort(),15000);
     try {
@@ -7242,8 +7294,10 @@ function installThreadedReading() {
       }
       observer.disconnect();
       try {
-        for(const card of cards) { s.list.append(card); mountLoadedMenu(s,card,config); }
-        s.loadedPages.add(page); s.nextURL=nextPage(doc,s,page); s.loadedThrough=page;
+        for(const card of cards) { placeImportedCard(s,card); s.imported.set(card.id,card); mountLoadedMenu(s,card,config); }
+        s.loadedPages.add(page);
+        if(page>=s.loadedThrough) { s.nextURL=nextPage(doc,s,page); s.loadedThrough=page; }
+        if(restoring) s.restorePages.shift();
       } finally { observe(); }
       refresh();
     } catch(error) {
@@ -7254,7 +7308,7 @@ function installThreadedReading() {
       if(state===s) {
         loadingStatus(s); scheduleFrame();
         // A short page may leave the sentinel intersecting without another observer event.
-        if(!s.loadError) requestAnimationFrame(()=>{ if(state===s) maybeLoad(s); });
+        if(!s.loadError) requestAnimationFrame(()=>{ if(state===s) { if(s.restorePages.length) loadNext(s); else maybeLoad(s); } });
       }
     }
   }
@@ -7265,6 +7319,15 @@ function installThreadedReading() {
   }
   function setupLoading(s) {
     s.loadedPages=new Set([s.page]); s.loadedThrough=s.page; s.retryAfter=0; s.nativeMenus=[]; s.registered=[];
+    s.imported=new Map(); s.restorePages=[];
+    const context=takeReplyContext(s);
+    if(context) {
+      s.restorePages=context.pages.filter(page=>page!==s.page);
+      if(context.defaultCollapsed===s.defaultCollapsed) {
+        const ids=value=>Array.isArray(value)?value.filter(n=>Number.isSafeInteger(n)&&n>0).slice(-2000):[];
+        s.collapsed=new Set(ids(context.collapsed)); s.initializedBranches=new Set(ids(context.initializedBranches));
+      }
+    }
     s.nextURL=nextPage(document,s,s.page);
     s.loader=el('div','nst-auto-load'); s.loader.setAttribute('role','status'); s.list.after(s.loader);
     s.hiddenPagers=[...document.querySelectorAll('.post-bottom-pager')]; s.hiddenPagers.forEach(n=>n.classList.add('nst-pagination-hidden'));
@@ -7273,6 +7336,69 @@ function installThreadedReading() {
       s.intersection.observe(s.loader);
     }
     loadingStatus(s);
+    if(s.restorePages.length) queueMicrotask(()=>loadNext(s));
+  }
+
+  // A per-tab, one-use marker survives the native editor's reload or last-page redirect.
+  // It contains page/fold metadata only, never draft text or comment HTML.
+  function takeReplyContext(s) {
+    try {
+      const key=`nst:reply-context:${s.topic}`, raw=sessionStorage.getItem(key);
+      if(!raw) return null;
+      sessionStorage.removeItem(key);
+      const value=JSON.parse(raw), age=Date.now()-value.at;
+      if(!Number.isFinite(age) || age<0 || age>10*60*1000 || !Number.isSafeInteger(value.firstPage) || !Number.isSafeInteger(value.lastPage) || value.firstPage<1 || value.lastPage<value.firstPage || s.page<value.firstPage) return null;
+      if(Array.isArray(value.pages)) {
+        if(!value.pages.length || value.pages.length>200 || value.pages.some(page=>!Number.isSafeInteger(page)||page<value.firstPage||page>value.lastPage)) return null;
+        value.pages=[...new Set(value.pages)].sort((a,b)=>a-b);
+      } else {
+        if(value.lastPage-value.firstPage>=200) return null;
+        value.pages=Array.from({length:value.lastPage-value.firstPage+1},(_,index)=>value.firstPage+index);
+      }
+      return value;
+    } catch { return null; }
+  }
+  function rememberReplyContext(event) {
+    const s=state, target=event.target;
+    if(!s || !target?.closest?.('#editor .md-editor') || target.closest('#nsit-app,[data-nsit-auto-dialog]')) return;
+    const control=event.type==='click'?target.closest('button.submit,button[type="submit"],input[type="submit"]'):null;
+    if(event.type==='click' && (!control || control.disabled || control.getAttribute('aria-disabled')==='true' || /保存|修改|更新/.test(control.textContent || control.value || ''))) return;
+    const input=[...s.editor?.querySelectorAll('textarea') || []].find(node=>!node.closest('#nsit-app'));
+    const draft=codeMirror()?.getValue?.() ?? input?.value ?? '';
+    if(!draft.trim()) return;
+    const pages=[...new Set([...s.loadedPages,...s.restorePages])].sort((a,b)=>a-b);
+    const marker={at:Date.now(),firstPage:pages[0],lastPage:pages.at(-1),pages,defaultCollapsed:s.defaultCollapsed,collapsed:[...s.collapsed].slice(-2000),initializedBranches:[...s.initializedBranches].slice(-2000)};
+    s.replySnapshot={at:marker.at,floors:[...s.posts.values()].filter(post=>!post.card.dataset.nstLoaded).map(post=>post.floor)};
+    try { sessionStorage.setItem(`nst:reply-context:${s.topic}`,JSON.stringify(marker)); } catch { /* Same-document restoration still works without storage. */ }
+  }
+  function retainLoadedConversation(s,list) {
+    if(s.list!==list) {
+      s.list.classList.remove('nst-thread'); s.list.querySelector(':scope > .nst-connectors')?.remove();
+      resize?.unobserve(s.list); s.list=list; resize?.observe(list);
+    }
+    if(s.bar.nextElementSibling!==list) list.before(s.bar);
+    if(list.nextElementSibling!==s.loader) list.after(s.loader);
+    for(const pager of document.querySelectorAll('.post-bottom-pager')) {
+      if(!s.hiddenPagers.includes(pager)) s.hiddenPagers.push(pager);
+      pager.classList.add('nst-pagination-hidden');
+    }
+    const current=new Map([...list.querySelectorAll(':scope > li.content-item')].map(card=>[card.id,card]));
+    for(const [id,card] of s.imported) {
+      if(!current.has(id)) placeImportedCard(s,card);
+      else if(current.get(id)!==card) {
+        // Prefer the site's fresh native copy; discard only our detached duplicate.
+        s.imported.delete(id);
+        releaseLoadedMenu(s,card);
+        card.remove();
+      }
+    }
+    refreshLoadedMenus(s);
+    const snapshot=s.replySnapshot;
+    if(snapshot && Date.now()-snapshot.at<60000 && snapshot.floors.some(floor=>!current.has(String(floor)))) {
+      s.replySnapshot=null;
+      if(!s.restorePages.includes(s.page)) s.restorePages.push(s.page);
+      queueMicrotask(()=>loadNext(s));
+    }
   }
 
   // A plain @mention or a link inside a quotation is not a parent relationship.
@@ -7375,7 +7501,7 @@ function installThreadedReading() {
     const s = state;
     if (!s) return;
     s.pendingHash = /^#\d+$/.test(location.hash) ? location.hash : '';
-    if (!s.pendingHash || mode !== 'thread') return;
+    if (!s.pendingHash || mode !== 'thread' || s.restorePages.length) return;
     const post = s.posts.get(Number(s.pendingHash.slice(1)));
     if (!post) return;
     s.pendingHash = '';
@@ -7578,7 +7704,10 @@ function installThreadedReading() {
     const ratio = range ? Math.max(0, Math.min(1,(window.scrollY - start) / range)) : (box.top < window.innerHeight ? 1 : 0);
     const percent = Math.round(ratio * 100);
     s.fill.style.width = `${percent}%`; s.progress.setAttribute('aria-valuenow', String(percent));
-    s.status.textContent = `已加载 ${percent}% · ${s.posts.size} 条评论 · 第 ${s.page}${s.loadedThrough>s.page?`–${s.loadedThrough}`:''} 页`;
+    const pages=[...s.loadedPages].sort((a,b)=>a-b), ranges=[];
+    for(const page of pages) { const last=ranges.at(-1); if(last && page===last[1]+1) last[1]=page; else ranges.push([page,page]); }
+    const pageLabel=ranges.map(([first,last])=>first===last?first:`${first}–${last}`).join('、');
+    s.status.textContent = `已加载 ${percent}% · ${s.posts.size} 条评论 · 第 ${pageLabel} 页`;
     if (markRead && !document.hidden) {
       let changed = false;
       for (const post of s.posts.values()) {
@@ -7623,14 +7752,17 @@ function installThreadedReading() {
     try {
       const current = route();
       const list = document.querySelector('ul.comments');
-      if (!featureEnabled('threadedReading') || !current || !list) { cleanup(); return; }
-      if (state && (state.topic !== current.topic || state.page !== current.page || state.list !== list)) cleanup();
+      if (!featureEnabled('threadedReading') || !current) { cleanup(); return; }
+      if (state && (state.topic !== current.topic || state.page !== current.page)) cleanup();
+      // Native rendering can briefly remove the list before inserting its replacement.
+      if (!list) return;
       if (!state) {
         const stored = read(`page:${current.topic}:${current.page}`, null);
         state = { ...current, list, posts:new Map(), collapsed:new Set(), initializedBranches:new Set(), defaultCollapsed:automaticTaskSettings().threadDefaultCollapsed, pendingHash:location.hash, known:new Set(Array.isArray(stored?.known) ? stored.known.filter(Number.isSafeInteger) : []), pending:new Set(Array.isArray(stored?.pending) ? stored.pending.filter(Number.isSafeInteger) : []), visited:Array.isArray(stored?.known), maxPage:current.page };
         makeBar(state); setupLoading(state); resize?.observe(list);
       }
       const s = state;
+      retainLoadedConversation(s,list);
       dockEditor(s);
       const op = document.querySelector('.content-item[id="0"]');
       s.op = op ? { card:op, body:op.querySelector('article.post-content'), author:op.querySelector('.author-name')?.textContent.trim() || '' } : null;
@@ -7708,7 +7840,7 @@ function installThreadedReading() {
       updateFrame(false);
       // Resolve a direct comment link once, including a target arriving on a later page.
       // Refreshing author info or loading replies must not undo a later manual fold.
-      if (mode === 'thread' && /^#\d+$/.test(s.pendingHash) && s.posts.has(Number(s.pendingHash.slice(1)))) revealHash();
+      if (mode === 'thread' && !s.restorePages.length && /^#\d+$/.test(s.pendingHash) && s.posts.has(Number(s.pendingHash.slice(1)))) revealHash();
     } finally { observe(); }
   }
   function schedule() { clearTimeout(timer); timer = setTimeout(refresh,80); }
@@ -7731,6 +7863,8 @@ function installThreadedReading() {
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
+  document.addEventListener('click',rememberReplyContext,true);
+  document.addEventListener('submit',rememberReplyContext,true);
   document.addEventListener('nsit:reveal-floor', event => revealFloor(event.detail?.floor));
   document.addEventListener('nsit:thread-default-changed', () => {
     const s = state;
