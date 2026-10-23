@@ -340,6 +340,68 @@ test('fixes the original editor, expands on reply and preserves draft and submit
   d.querySelector('.submit').click();assert.equal(submits,1);
 });
 
+test('Ctrl+Enter opens and focuses the reply draft without sending and the collapsed button advertises it', async t => {
+  const {w,d}=await setup(t,reply(1,'one'),{editor:true});
+  const editor=d.getElementById('editor'), draft=d.querySelector('.draft'), button=d.querySelector('.nst-editor-toggle');
+  let submits=0; d.querySelector('.submit').addEventListener('click',()=>submits++);
+  const shortcut=new w.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true});
+  d.body.dispatchEvent(shortcut); await pause(40);
+  assert.equal(editor.classList.contains('nst-editor-collapsed'),false);
+  assert.equal(d.activeElement,draft,'the existing draft is ready to type into');
+  assert.equal(draft.value,'未写完的草稿');
+  assert.equal(submits,0);
+  assert.equal(shortcut.defaultPrevented,true);
+  button.click();
+  assert.equal(editor.classList.contains('nst-editor-collapsed'),true);
+  assert.match(button.textContent,/展开回复.*Ctrl\+Enter/);
+  assert.equal(button.getAttribute('aria-keyshortcuts'),'Control+Enter');
+});
+
+test('Ctrl+Enter focuses an already open CodeMirror editor and blocks its native send shortcut', async t => {
+  const {w,d}=await setup(t,reply(1,'one'),{editor:true,init:w=>{
+    const input=w.document.querySelector('.draft');
+    w.document.querySelector('.CodeMirror').CodeMirror={refresh(){},focus(){input.focus();}};
+  }});
+  const editor=d.getElementById('editor'), draft=d.querySelector('.draft');
+  d.querySelector('.nst-editor-toggle').click(); await pause(40);
+  let nativeSends=0;
+  draft.addEventListener('keydown',event=>{if(event.ctrlKey && event.key==='Enter')nativeSends++;});
+  const shortcut=new w.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true});
+  draft.dispatchEvent(shortcut); await pause(40);
+  assert.equal(editor.classList.contains('nst-editor-collapsed'),false);
+  assert.equal(d.activeElement,draft);
+  assert.equal(nativeSends,0,'opening the editor must not reach a native Ctrl+Enter submit handler');
+  assert.equal(shortcut.defaultPrevented,true);
+  assert.equal(draft.value,'未写完的草稿');
+});
+
+test('reply opening shortcut ignores composition, extra modifiers, dialogs and stale routes', async t => {
+  const {w,d}=await setup(t,reply(1,'one'),{editor:true});
+  const editor=d.getElementById('editor');
+  const modal=d.createElement('div'); modal.setAttribute('role','dialog');
+  const input=d.createElement('textarea'); modal.append(input); d.body.append(modal);
+  const cases=[
+    [d.body,{key:'Enter',ctrlKey:true,isComposing:true}],
+    [d.body,{key:'Enter',ctrlKey:true,keyCode:229}],
+    [d.body,{key:'Enter',ctrlKey:true,shiftKey:true}],
+    [d.body,{key:'Enter',ctrlKey:true,altKey:true}],
+    [d.body,{key:'Enter',ctrlKey:true,metaKey:true}],
+    [d.body,{key:'Enter'}],
+    [input,{key:'Enter',ctrlKey:true}]
+  ];
+  for(const [target,keys] of cases) {
+    const event=new w.KeyboardEvent('keydown',{...keys,bubbles:true,cancelable:true});
+    target.dispatchEvent(event);
+    assert.equal(editor.classList.contains('nst-editor-collapsed'),true);
+    assert.equal(event.defaultPrevented,false);
+  }
+  w.history.pushState({},'','/categories/daily');
+  const shortcut=new w.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true});
+  d.body.dispatchEvent(shortcut);
+  assert.equal(editor.classList.contains('nst-editor-collapsed'),true);
+  assert.equal(shortcut.defaultPrevented,false);
+});
+
 test('newly loaded reply uses the same native editor and keeps existing draft content', async t => {
   const {d,bottom}=await setup(t,reply(1,'root'),{editor:true,pagination:pager(2),fetch:async()=>({ok:true,text:async()=>`<ul class="comments">${reply(11,'loaded')}</ul>`}),init:w=>{
     w.__config__={postData:{postId:123,comments:[]}};

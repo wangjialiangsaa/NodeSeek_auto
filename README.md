@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.68**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.69**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -22,7 +22,7 @@
 
 编辑栏只显示一个 **“🐔 工具”** 按钮，点击展开出鸡模板、粉色上传图片、计算器和收鸡模板。展开后保留原按钮的图标和颜色，点击空白处或按 Esc 收起。**“出🐔模板”**用于发布出售帖，**“收🐔模板”**用于发布收购帖，两者互不影响。
 
-帖子回复栏支持 **Enter 发送、Shift + Enter 换行**，发送使用原站评论按钮。中文输入法选词和空白内容不会触发发送，长按回车不会重复发送；发帖和脚本设置表单保持原来的键盘操作。
+帖子页面按 **Ctrl + Enter** 展开底部回复栏并聚焦输入框，已展开时直接聚焦；收起时按钮标注“展开回复 · Ctrl+Enter”。快捷键只展开和聚焦，回复栏仍支持 **Enter 发送、Shift + Enter 换行**，发送使用原站评论按钮。中文输入法确认不会触发快捷键，选词和空白内容不会触发发送，长按回车不会重复发送；发帖和脚本设置表单保持原来的键盘操作。
 
 楼主和各楼层昵称下方显示公开用户资料：等级、鸡腿、星辰、主题帖数、评论数和加入天数，楼中楼和下滑加载的新楼层同样支持。资料从 NodeSeek 官方用户空间接口读取，只为进入视野附近的用户加载，同一用户缓存 10 分钟并复用；最多同时查询两位用户。接口失败时保留原来的作者栏，不编造数据。可在油猴“功能开关 → 用户资料”关闭。
 

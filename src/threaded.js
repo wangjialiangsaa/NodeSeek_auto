@@ -143,11 +143,20 @@ function installThreadedReading() {
 
   function pageWindow() { return typeof unsafeWindow !== 'undefined' ? unsafeWindow : window; }
   function codeMirror() { return pageWindow().document.querySelector('#editor .CodeMirror')?.CodeMirror; }
+  const expandReplyLabel = '展开回复 · Ctrl+Enter';
   function openEditor(s, focus = false) {
     if (!s?.editor) return;
     s.editor.classList.remove('nst-editor-collapsed');
     s.editorToggle.textContent = '收起'; s.editorToggle.setAttribute('aria-expanded','true');
-    requestAnimationFrame(() => { codeMirror()?.refresh?.(); if (focus) codeMirror()?.focus?.(); layoutEditor(s); });
+    requestAnimationFrame(() => {
+      if (state !== s || !s.editor?.isConnected) return;
+      const cm = codeMirror(); cm?.refresh?.();
+      if (focus) {
+        if (typeof cm?.focus === 'function') cm.focus();
+        else [...s.editor.querySelectorAll('.md-editor textarea')].find(input => !input.disabled && !input.readOnly && !input.closest('#nsit-app'))?.focus();
+      }
+      layoutEditor(s);
+    });
   }
   function layoutEditor(s) {
     if (!s.editor?.isConnected) return;
@@ -169,11 +178,12 @@ function installThreadedReading() {
     s.editor = editor; s.editorStyle = editor.getAttribute('style');
     const header = el('div','nst-editor-head');
     header.append(el('span','', '回复当前帖子'));
-    const button = el('button','nst-editor-toggle','展开回复');
+    const button = el('button','nst-editor-toggle',expandReplyLabel);
     button.type = 'button'; button.setAttribute('aria-expanded','false');
+    button.setAttribute('aria-keyshortcuts','Control+Enter');
     button.addEventListener('click', () => {
       if (editor.classList.contains('nst-editor-collapsed')) openEditor(s,true);
-      else { editor.classList.add('nst-editor-collapsed'); button.textContent='展开回复'; button.setAttribute('aria-expanded','false'); layoutEditor(s); }
+      else { editor.classList.add('nst-editor-collapsed'); button.textContent=expandReplyLabel; button.setAttribute('aria-expanded','false'); layoutEditor(s); }
     });
     header.append(button); editor.prepend(header);
     const spacer = el('div','nst-editor-spacer'); editor.before(spacer);
@@ -931,6 +941,15 @@ function installThreadedReading() {
     clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true),700);
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
+  document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.key !== 'Enter' || !event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.isComposing || event.keyCode === 229) return;
+    const s = state, current = route();
+    if (!s?.editor?.isConnected || !current || current.topic !== s.topic || current.page !== s.page || !featureEnabled('threadedReading')) return;
+    if (event.target.closest?.('#nsit-app,[data-nsit-auto-dialog],[role="dialog"],.CodeMirror-dialog')) return;
+    // Capture before the native editor so opening/focusing never submits its draft.
+    event.preventDefault(); event.stopImmediatePropagation();
+    if (!event.repeat) openEditor(s,true);
+  },true);
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
   document.addEventListener('click',rememberReplyContext,true);
   document.addEventListener('submit',rememberReplyContext,true);
