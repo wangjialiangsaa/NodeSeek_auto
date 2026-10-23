@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.71**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.72**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -21,6 +21,8 @@
 个人信息统计栏右列底部提供齿轮图标与“自动化”入口，和左侧“过滤”并排显示，沿用原栏的图标尺寸、字号和间距。点击可设置每日签到和抽奖帖自动回复，原有配置继续使用。
 
 “过滤”下方提供同样式的“外观”小图标，也可从油猴菜单“背景与外观”进入，设置自定义背景、主体毛玻璃和图片取景。
+
+启用自定义背景后，左侧版块导航与主体共用毛玻璃底色和模糊参数，导航文字、图标使用主体正文配色，避免浅色图片透出导致看不清。
 
 编辑栏只显示一个 **“🐔 工具”** 按钮，点击展开出鸡模板、粉色上传图片、计算器和收鸡模板。展开后保留原按钮的图标和颜色，点击空白处或按 Esc 收起。**“出🐔模板”**用于发布出售帖，**“收🐔模板”**用于发布收购帖，两者互不影响。
 

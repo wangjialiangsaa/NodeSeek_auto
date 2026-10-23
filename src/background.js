@@ -117,7 +117,7 @@
         --link-color:var(--nsbg-link);--link-hover-color:var(--nsbg-ink);--tab-text:var(--nsbg-muted);--tab-text-hover:var(--nsbg-ink);--tab-active-text:var(--nsbg-ink)}
       [data-nsit-background-layer]{position:fixed;inset:0;z-index:-2;pointer-events:none;background-color:#111827;background-size:cover;background-repeat:no-repeat;background-position:50% 50%}
       html.nsit-background-on #nsk-body{position:relative;background:transparent!important;color:var(--nsbg-ink)!important}
-      html.nsit-background-on #nsk-body::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{
+      html.nsit-background-on #nsk-body::before,html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{
         content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--nsbg-panel);
         -webkit-backdrop-filter:blur(var(--nsbg-blur));backdrop-filter:blur(var(--nsbg-blur))}
       html.nsit-background-on body>header,html.nsit-background-on body>footer{position:relative;background:transparent!important;color:var(--nsbg-ink)!important}
@@ -125,6 +125,10 @@
       html.nsit-background-on #nsk-body :is(.nsk-panel,.post-content,.post-title,.author-info){color:var(--nsbg-ink)}
       html.nsit-background-on #nsk-body :is(.content-info,.info-author,.info-last-comment,.signature,.nsit-author-info){color:var(--nsbg-muted)}
       html.nsit-background-on #nsk-body :is(.post-title>a,.author-name,.nsk-panel a,.user-stat a){color:var(--nsbg-link)}
+      /* The fixed category navigation sits outside the main panel's bounds.
+         Give its inner card the same glass surface, retaining the fixed parent. */
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list{position:relative;color:var(--nsbg-ink)}
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list a{color:var(--nsbg-ink)}
       html.nsit-background-on #nsk-body ul.comments.nst-thread{--nst-surface:var(--nsbg-solid)}
       html.nsit-background-on #editor.nst-fixed-editor{background:transparent!important;color:var(--nsbg-ink)}
       html.nsit-background-on #editor .nst-editor-head{background:transparent!important;color:var(--nsbg-ink)}
@@ -138,7 +142,7 @@
       :where(html.nsit-background-on body :is(pre,#editor .md-editor,.CodeMirror)){color:var(--nsbg-native-text-color)}
       :where(html.nsit-background-on body code:not(pre code)){color:var(--nsbg-native-text-color)}
       @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-        html.nsit-background-on #nsk-body::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{background:var(--nsbg-solid)!important}}
+        html.nsit-background-on #nsk-body::before,html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{background:var(--nsbg-solid)!important}}
       .nsit-background-modal{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim,rgba(0,0,0,.5));color:var(--nsit-ink,#27334a);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
       .nsit-background-modal[hidden]{display:none}
       .nsit-background-dialog{box-sizing:border-box;width:min(500px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong,#bbb);border-radius:12px;background:var(--nsit-surface,#fff);box-shadow:0 12px 40px #0004}
