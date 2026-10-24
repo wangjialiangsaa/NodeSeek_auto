@@ -612,11 +612,13 @@
   const homeFeedLoading = installHomeFeedLoading();
   injectBaseStyles();
   const customBackground = installCustomBackground();
+  const stickyHeader = installStickyHeader();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
   const authorInfo = installAuthorInfo();
   const observer = new MutationObserver(() => {
+    stickyHeader.refresh();
     homeFeedLoading.refresh();
     automaticTasks.schedule();
     authorInfo.schedule();

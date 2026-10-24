@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.76**。跳过 1.4.75，撤下 AI 测试版。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.77**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 如已单独创建“NodeSeek auto AI test”测试脚本，请在油猴中停用或删除；正式版不包含 AI 功能。
 
@@ -17,6 +17,8 @@
 ## 界面
 
 界面跟随 NodeSeek 的浅色 / 深色主题自动切换，无需额外设置。
+
+顶部导航固定在页面上方，滚动时导航、搜索和主题切换保持可用；跳转楼层时自动避让顶栏。
 
 个人信息统计栏内提供漏斗图标与“过滤”入口，位于左列底部，与等级、鸡腿、通知等项目保持相同的图标、字号和间距。点击后打开“过滤”面板，支持关键词、用户昵称以及屏蔽和高亮处理；原顶部导航和齿轮旁的入口已移至此处，已有规则继续使用。折叠与隐藏均直接移除匹配帖子在列表中的显示，不留提示条或“查看”按钮。
 
