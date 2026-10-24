@@ -257,3 +257,25 @@ test('previewing multiple backgrounds keeps the saved image cached so dismissing
   assert.equal(loads.length, before, 'the original saved image is retained for preview restoration');
   assert.ok(d.querySelector('[data-nsit-background-layer]').style.backgroundImage.includes(firstURL));
 });
+
+test('glass over the fixed wallpaper is pre-blurred once instead of live backdrop blur, with fallbacks', async t => {
+  const { w, d, loads, controller } = setup(t);
+  const root = d.documentElement, filters = [], data = new Uint8ClampedArray(64 * 64 * 4).fill(255);
+  w.HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, drawImage() {}, getImageData: () => ({ data }), get filter() { return this._filter || 'none'; }, set filter(value) { this._filter = value; filters.push(value); } });
+  w.HTMLCanvasElement.prototype.toBlob = callback => callback(new w.Blob(['glass']));
+  const revoked = [];
+  w.URL.createObjectURL = () => 'blob:glass'; w.URL.revokeObjectURL = url => revoked.push(url);
+  const pending = controller.apply({ ...enabled(firstURL), lowPower: false, blur: 16 }); loads[0].onload(); await pending;
+  assert.equal(root.classList.contains('nsit-background-static-glass'), false, 'live blur stays until CORS pixels are readable');
+  loads[1].onload(); await wait();
+  assert.deepEqual(filters, ['blur(8px)'], 'the glass is rendered at half resolution with a matching radius');
+  assert.equal(root.classList.contains('nsit-background-static-glass'), false, 'the blob image must load before it replaces the live blur');
+  loads[2].onload();
+  assert.equal(root.classList.contains('nsit-background-static-glass'), true);
+  assert.equal(root.style.getPropertyValue('--nsbg-glass'), 'url("blob:glass")');
+  assert.equal(root.style.getPropertyValue('--nsbg-backdrop'), 'blur(16px)', 'header and docked editor keep the live blur');
+  await controller.apply({ ...enabled(firstURL), lowPower: true });
+  assert.equal(root.classList.contains('nsit-background-static-glass'), false, 'power saving removes the glass surface');
+  assert.equal(root.style.getPropertyValue('--nsbg-glass'), '');
+  assert.deepEqual(revoked, ['blob:glass']);
+});

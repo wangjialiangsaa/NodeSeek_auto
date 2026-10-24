@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.79
+// @version      1.4.80
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.79';
+  const VERSION = '1.4.80';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -8248,6 +8248,12 @@ const BACKGROUND_SETTINGS_KEY = 'nsit-background-settings-v1';
       html.nsit-background-on #nsk-body::before,html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list::before,html.nsit-background-on body>header::before,html.nsit-background-on body>footer::before,html.nsit-background-on #editor.nst-fixed-editor::before{
         content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--nsbg-panel);
         -webkit-backdrop-filter:var(--nsbg-backdrop,none);backdrop-filter:var(--nsbg-backdrop,none)}
+      /* Static glass: panels over nothing but the fixed wallpaper show a pre-blurred
+         copy aligned to the viewport. The pinned header and docked editor float over
+         scrolling content, so they keep the live backdrop blur (both are small). */
+      html.nsit-background-on.nsit-background-static-glass #nsk-body::before,html.nsit-background-on.nsit-background-static-glass #nsk-left-panel-container .nsk-panel.category-list::before,html.nsit-background-on.nsit-background-static-glass body>footer::before{
+        -webkit-backdrop-filter:none;backdrop-filter:none;
+        background:linear-gradient(var(--nsbg-panel),var(--nsbg-panel)),var(--nsbg-glass) 0 0/100% 100% no-repeat fixed}
       html.nsit-background-on body>header,html.nsit-background-on body>footer{position:relative;background:transparent!important;color:var(--nsbg-ink)!important}
       html.nsit-background-on #nsk-body :is(.user-stat,.nsk-panel,.nsk-post,.comment-container,.post-list-controler,ul.post-list,li.content-item,li.post-list-item:not(.nsit-filter-highlighted)){background-color:transparent!important}
       html.nsit-background-on #nsk-body :is(.nsk-panel,.post-content,.post-title,.author-info){color:var(--nsbg-ink)}
@@ -8354,11 +8360,65 @@ const BACKGROUND_SETTINGS_KEY = 'nsit-background-settings-v1';
         context.fillStyle = '#111827'; context.fillRect(0, 0, 64, 64);
         context.drawImage(image, 0, 0, 64, 64);
         const pixels = context.getImageData(0, 0, 64, 64);
-        return { width: 64, height: 64, data: pixels.data };
+        // Keep the CORS-clean image: the static glass below can export pixels from it.
+        return { width: 64, height: 64, data: pixels.data, image };
       } catch (_) { return null; }
     }
 
+    /* 静态毛玻璃 ---------------------------------------------------------------
+     * 壁纸固定在视口上，面板后面的内容就是壁纸本身。按当前取景把壁纸模糊一次，
+     * 生成与视口对齐的图片，面板以 fixed 背景贴上，效果与 backdrop-filter 相同，
+     * 但滚动时不再每帧实时模糊整屏。跨域像素读不到、浏览器不支持画布滤镜或
+     * 触屏设备（fixed 背景不可靠）时保留实时毛玻璃。
+     * ------------------------------------------------------------------------- */
+    let glassURL = '', glassKey = '', glassJob = 0;
+    function setGlass(url) {
+      if (glassURL && glassURL !== url) URL.revokeObjectURL(glassURL);
+      glassURL = url;
+      if (url) { root.style.setProperty('--nsbg-glass', `url("${url}")`); root.classList.add('nsit-background-static-glass'); }
+      else { root.style.removeProperty('--nsbg-glass'); root.classList.remove('nsit-background-static-glass'); }
+    }
+    function renderGlass(crop, size) {
+      const image = resource?.sample?.image;
+      const blur = current.lowPower ? 0 : current.blur;
+      const supported = typeof URL.createObjectURL === 'function' && !window.matchMedia?.('(pointer: coarse)').matches;
+      const key = blur && image && supported ? JSON.stringify([current.backgroundUrl, blur, crop, size]) : '';
+      if (key === glassKey) return;
+      glassKey = key; const job = ++glassJob;
+      if (!key) { setGlass(''); return; }
+      try {
+        // Blur hides detail, so half resolution looks identical and halves the work.
+        const scale = .5, width = Math.max(1, Math.round(size.width * scale)), height = Math.max(1, Math.round(size.height * scale));
+        const radius = blur * scale, pad = Math.ceil(radius * 3);
+        const base = document.createElement('canvas'); base.width = width + pad * 2; base.height = height + pad * 2;
+        const context = base.getContext('2d');
+        const out = document.createElement('canvas'); out.width = width; out.height = height;
+        const output = out.getContext('2d');
+        if (!context || !output || !('filter' in output)) { setGlass(''); return; }
+        const iw = image.naturalWidth, ih = image.naturalHeight;
+        context.drawImage(image, crop.left * iw, crop.top * ih, crop.width * iw, crop.height * ih, pad, pad, width, height);
+        // Repeat the edge pixels into the padding, like backdrop-filter does at the viewport edge.
+        context.drawImage(base, pad, pad, 1, height, 0, pad, pad, height);
+        context.drawImage(base, pad + width - 1, pad, 1, height, pad + width, pad, pad, height);
+        context.drawImage(base, 0, pad, base.width, 1, 0, 0, base.width, pad);
+        context.drawImage(base, 0, pad + height - 1, base.width, 1, 0, pad + height, base.width, pad);
+        output.filter = `blur(${radius}px)`;
+        if (output.filter === 'none') { setGlass(''); return; }
+        output.drawImage(base, -pad, -pad);
+        out.toBlob(blob => {
+          if (job !== glassJob || disposed) return;
+          if (!blob) { setGlass(''); return; }
+          const url = URL.createObjectURL(blob), probe = new Image();
+          // Apply only after the page accepts blob: images, so a strict CSP never leaves an unblurred panel.
+          probe.onload = () => { if (job === glassJob && !disposed) setGlass(url); else URL.revokeObjectURL(url); };
+          probe.onerror = () => { URL.revokeObjectURL(url); if (job === glassJob) setGlass(''); };
+          probe.src = url;
+        }, 'image/jpeg', .9);
+      } catch (_) { setGlass(''); }
+    }
+
     function removeAppearance() {
+      glassKey = ''; glassJob++; setGlass('');
       lastRender = null;
       root.classList.remove('nsit-background-on');
       delete root.dataset.nsitBackgroundTone;
@@ -8394,6 +8454,7 @@ const BACKGROUND_SETTINGS_KEY = 'nsit-background-settings-v1';
       for (const [key, value] of Object.entries(nativeColors)) root.style.setProperty(`--nsbg-native-${key}`, value);
       root.dataset.nsitBackgroundTone = palette.mode;
       root.classList.add('nsit-background-on');
+      renderGlass(crop, size);
       const resolution = `图片 ${resource.width} × ${resource.height} · `;
       runtime.status = resolution + (resource.sample ? `已适配${palette.mode === 'light' ? '亮色' : '暗色'}背景 · 主体不透明度 ${Math.round(palette.alpha * 100)}%` : `背景已显示 · 使用高对比${palette.mode === 'light' ? '浅色' : '深色'}保护${current.autoFocus ? '与居中取景' : ''}`) + (current.lowPower ? ' · 省电显示' : '');
       lastRender = { key, resource, sample: resource.sample };
