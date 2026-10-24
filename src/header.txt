@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.75
-// @description  NodeSeek AI 阅读助手、自定义背景、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
+// @version      1.4.74
+// @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
 // @supportURL   https://github.com/wangjialiangsaa/NodeSeek_auto/issues
@@ -18,6 +18,5 @@
 // @grant        unsafeWindow
 // @connect      api.nodeimage.com
 // @connect      *.workers.dev
-// @connect      *
 // @run-at       document-idle
 // ==/UserScript==

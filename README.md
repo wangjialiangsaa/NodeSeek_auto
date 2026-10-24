@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.75**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.74**。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 已安装旧版时，用此链接更新；如果另装过独立的“NodeSeek 楼中楼阅读”，请停用独立脚本，使用本整合版。
 
@@ -55,16 +55,6 @@
 面向收机场景的轻量表单，填目标机器和收购条件即可生成收购帖。
 
 ## 功能
-
-### AI 小助手（测试版）
-
-左下角提供 AI 助手卡片，宽屏利用左侧空白区域，窄屏默认收起。个人信息统计栏的“AI”设置图标与“外观”并排，也可从油猴菜单“AI 助手设置”进入。
-
-- 默认未启用。先填写自定义的 **Chat Completions 兼容 API 地址、API Key 和模型名称**，勾选启用后保存；本机服务可使用 HTTP 并留空 Key。
-- 点击“总结本页”总结当前帖子及已加载回复，或整理列表标题；“重复问题”将当前已加载材料中的相似问题归类，可额外输入具体问题。
-- 结果展示参考帖子链接，支持复制、取消和失败后重试。首版只使用本页已加载内容，不进行全站检索。
-- 仅在用户点击分析后发送请求；配置与 Key 保存在本机油猴存储，私信和编辑草稿不参与分析。AI 结果以文字显示，不自动发帖或回复。
-- 自定义接口需要油猴允许对应域名联网；脚本使用 `@connect *` 兼容用户填写的不同服务，不内置共享 Key。
 
 ### 自定义背景
 
