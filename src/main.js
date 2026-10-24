@@ -612,6 +612,7 @@
   const homeFeedLoading = installHomeFeedLoading();
   injectBaseStyles();
   const customBackground = installCustomBackground();
+  const aiAssistant = installAiAssistant();
   window[RUNTIME_KEY]?.disconnect?.();
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
@@ -631,6 +632,7 @@
     ensurePostFilterTrigger();
     ensureAutomaticTaskTrigger();
     customBackground.refresh();
+    aiAssistant.refresh();
     filterPostListItems();
     renderTradeStatusActions();
   });
@@ -661,3 +663,4 @@
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
   if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('背景与外观', openBackgroundSettings);
+  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('AI 助手设置', () => aiAssistant.openSettings());
