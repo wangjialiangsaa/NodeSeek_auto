@@ -26,11 +26,20 @@ function color(w, node, property) {
 
 function setup(t, { bright = true } = {}) {
   const dom = new JSDOM(`<html><head><style>
-    body{--bg-main-color:#fff;--bg-sub-color:#f5f5f5;--text-color:#222;--body-text:#222;background:#ddd;color:#111}body.dark-layout{--bg-main-color:#272727;--bg-sub-color:#3b3b3b;--text-color:#ddd;--body-text:#ddd;background:#333;color:#ddd}
+    body{--bg-main-color:#fff;--bg-sub-color:#f5f5f5;--text-color:#222;--body-text:#222;background:#ddd;color:#111;font-family:"Test Sans",sans-serif;font-size:13px;line-height:1.5}body.dark-layout{--bg-main-color:#272727;--bg-sub-color:#3b3b3b;--text-color:#ddd;--body-text:#ddd;background:#333;color:#ddd}
+    #nsk-left-panel-container .category-list{font-size:14px}
+    #nsk-left-panel-container .category-list li:not(.current-category){opacity:.5}
+    #nsk-left-panel-container .category-list a{color:#666}body.dark-layout #nsk-left-panel-container .category-list a{color:#999}
+    #nsk-left-panel-container .category-list .current-category a{font-weight:700}
+    #nsk-left-panel-container .category-list svg{fill:currentColor}
     textarea,.native-popup{color:var(--text-color);background-color:var(--bg-main-color)}
     #editor{position:fixed;bottom:0}.post-content pre{color:#dedede;background:#282828}.hljs-keyword{color:#ff80ab}
     .badge{color:#e3a000;background:#493000}.active-vote{color:#17b749}.pink-upload{color:#fff;background:#e35d9f}
     </style></head><body><div id="nsk-body"><article class="post-content">Native text<pre><code><span class="hljs-keyword">const</span> answer = 42</code></pre></article>
+    <aside id="nsk-left-panel-container"><div class="nsk-panel category-list"><ul>
+    <li><a href="/categories/daily"><svg><use href="#tea"></use></svg><span>日常</span></a></li>
+    <li class="current-category"><a href="/categories/tech"><svg><use href="#code"></use></svg><span>技术</span></a></li>
+    </ul></div></aside><div class="nsk-panel"><a id="native-panel-link" href="/post-10-1">主体链接</a></div>
     <span class="badge">Lv5</span><button class="active-vote">鸡腿</button><button class="pink-upload">上传图片</button>
     <div class="native-popup">Native popup</div><div id="editor" class="nst-fixed-editor"><div class="md-editor"><textarea>draft stays</textarea><div class="CodeMirror"><span class="cm-keyword" style="color:#e080e0">if</span></div></div></div></div></body></html>`, { url: 'https://www.nodeseek.com/post-10-1', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window, d = w.document, storage = new Map(), loads = [];
@@ -50,6 +59,30 @@ function setup(t, { bright = true } = {}) {
   return { w, d, storage, loads, controller: w.controller };
 }
 const enabled = backgroundUrl => ({ enabled: true, backgroundUrl, opacity: 35, autoContrast: true, autoFocus: true });
+
+test('category navigation follows the main palette without dimming and inherits page typography', async t => {
+  const { w, d, loads, controller } = setup(t);
+  const list = d.querySelector('.category-list'), item = list.querySelector('li'), link = item.querySelector('a');
+  const native = d.querySelector('#native-panel-link');
+  assert.equal(w.getComputedStyle(item).opacity, '0.5', 'fixture reproduces the native faded navigation');
+  assert.equal(w.getComputedStyle(list).fontSize, '14px');
+  const pending = controller.apply(enabled(firstURL)); loads[0].onload(); await pending;
+  for (const label of ['before sampling', 'bright image', 'native dark theme']) {
+    assert.equal(w.getComputedStyle(item).opacity, '1', label);
+    assert.equal(color(w, link, 'color'), color(w, native, 'color'), label);
+    assert.equal(color(w, link.querySelector('svg'), 'color'), color(w, link, 'color'), `${label}: icons follow their link`);
+    assert.equal(w.getComputedStyle(list.querySelector('.current-category a')).fontWeight, '700', `${label}: retain the current category emphasis`);
+    // JSDOM keeps explicit inherit keywords; verify the cascade relinquishes
+    // the native fixed size so real browsers use the surrounding page font.
+    for (const property of ['font-family', 'font-size', 'line-height']) assert.equal(w.getComputedStyle(list).getPropertyValue(property), 'inherit', `${label}: ${property}`);
+    if (label === 'before sampling') { loads.find(image => image.crossOrigin).onload(); await wait(); }
+    else if (label === 'bright image') { d.body.classList.add('dark-layout'); await controller.apply({ ...enabled(firstURL), autoContrast: false }); }
+  }
+  await controller.apply({ enabled: false });
+  assert.equal(w.getComputedStyle(item).opacity, '0.5', 'disabling the background restores native navigation');
+  assert.equal(w.getComputedStyle(list).fontSize, '14px');
+  assert.equal(color(w, link, 'color'), 'rgb(153, 153, 153)');
+});
 
 test('power saving keeps the full resolution background while disabling live blur and allows restoring it', async t => {
   const { w, d, loads, controller } = setup(t);

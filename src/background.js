@@ -136,8 +136,11 @@
       html.nsit-background-on #nsk-body :is(.post-title>a,.author-name,.nsk-panel a,.user-stat a){color:var(--nsbg-link)}
       /* The fixed category navigation sits outside the main panel's bounds.
          Give its inner card the same glass surface, retaining the fixed parent. */
-      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list{position:relative;color:var(--nsbg-ink)}
-      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list a{color:var(--nsbg-ink)}
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list{position:relative;color:var(--nsbg-ink);font-family:inherit;font-size:inherit;line-height:inherit}
+      /* Native inactive categories use opacity:.5, which dims the text and
+         currentColor icons after the readable palette has been applied. */
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list li{opacity:1}
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list a{color:var(--nsbg-link)}
       html.nsit-background-on #nsk-body ul.comments.nst-thread{--nst-surface:var(--nsbg-solid)}
       html.nsit-background-on #editor.nst-fixed-editor{background:transparent!important;color:var(--nsbg-ink)}
       html.nsit-background-on #editor .nst-editor-head{background:transparent!important;color:var(--nsbg-ink)}

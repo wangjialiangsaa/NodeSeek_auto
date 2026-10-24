@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.74
+// @version      1.4.76
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.74';
+  const VERSION = '1.4.76';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -8231,8 +8231,11 @@ const BACKGROUND_SETTINGS_KEY = 'nsit-background-settings-v1';
       html.nsit-background-on #nsk-body :is(.post-title>a,.author-name,.nsk-panel a,.user-stat a){color:var(--nsbg-link)}
       /* The fixed category navigation sits outside the main panel's bounds.
          Give its inner card the same glass surface, retaining the fixed parent. */
-      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list{position:relative;color:var(--nsbg-ink)}
-      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list a{color:var(--nsbg-ink)}
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list{position:relative;color:var(--nsbg-ink);font-family:inherit;font-size:inherit;line-height:inherit}
+      /* Native inactive categories use opacity:.5, which dims the text and
+         currentColor icons after the readable palette has been applied. */
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list li{opacity:1}
+      html.nsit-background-on #nsk-left-panel-container .nsk-panel.category-list a{color:var(--nsbg-link)}
       html.nsit-background-on #nsk-body ul.comments.nst-thread{--nst-surface:var(--nsbg-solid)}
       html.nsit-background-on #editor.nst-fixed-editor{background:transparent!important;color:var(--nsbg-ink)}
       html.nsit-background-on #editor .nst-editor-head{background:transparent!important;color:var(--nsbg-ink)}
