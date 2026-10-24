@@ -101,7 +101,7 @@ function installThreadedReading() {
   const validModes = ['thread', 'quote', 'raw'];
   let mode = read('mode', 'thread');
   if (!validModes.includes(mode)) mode = 'thread';
-  let state = null, timer = 0, frame = 0;
+  let state = null, timer = 0, frame = 0, frameForce = false;
   const savedStyles = new WeakMap();
   const connectorMarkup = new WeakMap();
   const previewCache = new Map();
@@ -163,11 +163,13 @@ function installThreadedReading() {
     const box = s.list.getBoundingClientRect();
     const width = Math.max(0,Math.min(box.width || window.innerWidth - 24,window.innerWidth - 16));
     const left = Math.max(8,Math.min(box.left,window.innerWidth - width - 8));
-    s.editor.style.setProperty('--nst-editor-left',`${left}px`);
-    s.editor.style.setProperty('--nst-editor-width',`${width}px`);
+    // Runs on every scroll frame: skip unchanged writes, since a root custom
+    // property write restyles the whole page.
+    setStyleVar(s.editor,'--nst-editor-left',`${left}px`);
+    setStyleVar(s.editor,'--nst-editor-width',`${width}px`);
     const height = Math.ceil(s.editor.getBoundingClientRect().height || 48);
     if (s.editorSpacer.style.height !== `${height + 16}px`) s.editorSpacer.style.height = `${height + 16}px`;
-    document.documentElement.style.setProperty('--nst-dock-height',`${height + 16}px`);
+    setStyleVar(document.documentElement,'--nst-dock-height',`${height + 16}px`);
     s.editorHeight = height;
   }
   function dockEditor(s) {
@@ -727,29 +729,41 @@ function installThreadedReading() {
     s.list.before(bar); s.bar = bar;
   }
 
-  function drawConnectors(s) {
+  function setStyleVar(node, key, value) {
+    if (node.style.getPropertyValue(key) !== value) node.style.setProperty(key, value);
+  }
+  // reuse: called for a plain scroll. Connector geometry is relative to the list, so it
+  // only changes when the list resizes, posts change or a forced redraw is requested.
+  function drawConnectors(s, reuse = false) {
     let svg = s.list.querySelector(':scope > .nst-connectors');
-    if (mode !== 'thread') { svg?.remove(); return; }
+    if (mode !== 'thread') { svg?.remove(); s.connectorKey = ''; return; }
     const box = s.list.getBoundingClientRect();
-    const paths = [], geometry = new Map();
+    const key = `${box.width}|${box.height}|${s.sorted.length}`;
+    if (reuse && key === s.connectorKey && (svg || s.connectorEmpty)) return;
+    s.connectorKey = key;
+    const paths = [], geometry = new Map(), toggles = [];
+    // Measure every card first, then write positions, then measure toggles once:
+    // interleaving reads and writes would force one layout per post.
     for (const post of s.sorted) {
       if (post.hidden || !post.card.getClientRects().length) continue;
       const a = post.card.querySelector('.avatar-wrapper img')?.getBoundingClientRect();
       if (!a?.width) continue;
-      let startY = a.bottom - box.top + 3;
+      const item = { avatar:a, startY:a.bottom - box.top + 3 };
       if (post.toggle) {
         const cardBox = post.card.getBoundingClientRect();
         const menuBox = post.card.querySelector('.comment-menu')?.getBoundingClientRect();
         const x = a.left - cardBox.left + a.width / 2;
         const y = menuBox?.height ? menuBox.top - cardBox.top + menuBox.height / 2 - 14 : cardBox.height - 40;
-        const values = { '--nst-toggle-x':x - 14, '--nst-toggle-y':Math.max(a.bottom - cardBox.top + 3,y), '--nst-rail-x':x, '--nst-rail-top':a.bottom - cardBox.top + 3 };
-        for (const [key,value] of Object.entries(values)) post.card.style.setProperty(key,`${value}px`);
-        const toggleBox = post.toggle.getBoundingClientRect();
-        startY = toggleBox.top - box.top + toggleBox.height / 2;
-        post.card.style.setProperty('--nst-rail-height',`${Math.max(0,startY - (a.bottom - box.top + 3))}px`);
+        toggles.push({ post, item, values:{ '--nst-toggle-x':x - 14, '--nst-toggle-y':Math.max(a.bottom - cardBox.top + 3,y), '--nst-rail-x':x, '--nst-rail-top':a.bottom - cardBox.top + 3 } });
       }
-      geometry.set(post.floor,{avatar:a,startY});
+      geometry.set(post.floor,item);
     }
+    for (const { post, values } of toggles) for (const [name,value] of Object.entries(values)) setStyleVar(post.card,name,`${value}px`);
+    for (const toggle of toggles) {
+      const toggleBox = toggle.post.toggle.getBoundingClientRect();
+      toggle.item.startY = toggleBox.top - box.top + toggleBox.height / 2;
+    }
+    for (const { post, item } of toggles) setStyleVar(post.card,'--nst-rail-height',`${Math.max(0,item.startY - (item.avatar.bottom - box.top + 3))}px`);
     for (const parent of s.sorted) {
       const own = geometry.get(parent.floor);
       if (!own || parent.folded) continue;
@@ -762,6 +776,7 @@ function installThreadedReading() {
       // One spine per parent avoids darkening shared segments for every sibling.
       paths.push(`M ${startX} ${own.startY} H ${lane} V ${lastY - 10} ` + ends.map(end => `M ${lane} ${end.y - 10} Q ${lane} ${end.y} ${lane + 10} ${end.y} H ${end.x}`).join(' '));
     }
+    s.connectorEmpty = !paths.length;
     if (!paths.length) { svg?.remove(); return; }
     // Read-only previews never inject remote HTML. Only numeric SVG paths are generated here.
     const html = paths.map(d => `<path d="${d}"/>`).join('');
@@ -772,8 +787,8 @@ function installThreadedReading() {
     if (connectorMarkup.get(svg) !== html) { svg.innerHTML = html; connectorMarkup.set(svg, html); }
   }
 
-  function updateFrame(markRead = false) {
-    frame = 0;
+  function updateFrame(markRead = false, reuseConnectors = false) {
+    frame = 0; frameForce = false;
     const s = state;
     if (!s?.list.isConnected) return;
     layoutEditor(s);
@@ -782,11 +797,12 @@ function installThreadedReading() {
     const range = Math.max(0, box.height - window.innerHeight + (s.editorHeight || 0) + 100);
     const ratio = range ? Math.max(0, Math.min(1,(window.scrollY - start) / range)) : (box.top < window.innerHeight ? 1 : 0);
     const percent = Math.round(ratio * 100);
-    s.fill.style.width = `${percent}%`; s.progress.setAttribute('aria-valuenow', String(percent));
+    if (s.fill.style.width !== `${percent}%`) { s.fill.style.width = `${percent}%`; s.progress.setAttribute('aria-valuenow', String(percent)); }
     const pages=[...s.loadedPages].sort((a,b)=>a-b), ranges=[];
     for(const page of pages) { const last=ranges.at(-1); if(last && page===last[1]+1) last[1]=page; else ranges.push([page,page]); }
     const pageLabel=ranges.map(([first,last])=>first===last?first:`${first}–${last}`).join('、');
-    s.status.textContent = `已加载 ${percent}% · ${s.posts.size} 条评论 · 第 ${pageLabel} 页`;
+    const statusText = `已加载 ${percent}% · ${s.posts.size} 条评论 · 第 ${pageLabel} 页`;
+    if (s.status.textContent !== statusText) s.status.textContent = statusText;
     if (markRead && !document.hidden) {
       let changed = false;
       for (const post of s.posts.values()) {
@@ -798,12 +814,15 @@ function installThreadedReading() {
       }
       if (changed) persist(s);
     }
-    s.updates.textContent = s.pending.size ? `${s.pending.size} 条新回复 · 定位` : '暂无新回复';
+    const updatesText = s.pending.size ? `${s.pending.size} 条新回复 · 定位` : '暂无新回复';
+    if (s.updates.textContent !== updatesText) s.updates.textContent = updatesText;
     s.updates.disabled = !s.pending.size;
-    drawConnectors(s);
+    drawConnectors(s, reuseConnectors);
   }
-  function scheduleFrame() {
-    if (!frame) frame = requestAnimationFrame(() => updateFrame(false));
+  // Only a plain scroll passes false; resizes, image loads and list changes redraw connectors.
+  function scheduleFrame(force) {
+    if (force !== false) frameForce = true;
+    if (!frame) frame = requestAnimationFrame(() => updateFrame(false, !frameForce));
   }
   function cleanup() {
     if (!state) return;
@@ -937,9 +956,9 @@ function installThreadedReading() {
   let readTimer = 0, loadFrame = 0;
   // Scroll fires many times per frame; measure the loader at most once per frame.
   window.addEventListener('scroll', () => {
-    scheduleFrame();
+    scheduleFrame(false);
     if (!loadFrame) loadFrame = requestAnimationFrame(() => { loadFrame = 0; maybeLoad(state); });
-    clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true),700);
+    clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true,true),700);
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
   document.addEventListener('keydown', event => {
