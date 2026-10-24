@@ -617,11 +617,19 @@
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
   const authorInfo = installAuthorInfo();
-  const observer = new MutationObserver(() => {
-    stickyHeader.refresh();
+  // 站点任何 DOM 变化都会触发观察器。轻量且需要立即生效的（顶栏、背景、帖子过滤、
+  // 后台任务调度）同步执行；其余入口与标记的渲染合并到下一帧，连续变化每帧最多一轮。
+  // 后台页签不触发 requestAnimationFrame，用定时器兜底。
+  let renderFrame = 0;
+  let renderTimer = 0;
+  function cancelPageRender() {
+    if (renderFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(renderFrame);
+    clearTimeout(renderTimer);
+    renderFrame = 0; renderTimer = 0;
+  }
+  function renderPageEnhancements() {
+    cancelPageRender();
     homeFeedLoading.refresh();
-    automaticTasks.schedule();
-    authorInfo.schedule();
     renderLuckyTrigger();
     runLuckyWriteback();
     showLuckyWritebackResult();
@@ -632,11 +640,22 @@
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
     ensureAutomaticTaskTrigger();
+    renderTradeStatusActions();
+  }
+  function schedulePageRender() {
+    if (renderTimer) return;
+    if (typeof requestAnimationFrame === 'function') renderFrame = requestAnimationFrame(renderPageEnhancements);
+    renderTimer = setTimeout(renderPageEnhancements, 200);
+  }
+  const observer = new MutationObserver(() => {
+    stickyHeader.refresh();
+    automaticTasks.schedule();
+    authorInfo.schedule();
     customBackground.refresh();
     filterPostListItems();
-    renderTradeStatusActions();
+    schedulePageRender();
   });
-  window[RUNTIME_KEY] = observer;
+  window[RUNTIME_KEY] = { disconnect() { observer.disconnect(); cancelPageRender(); } };
   observer.observe(document.documentElement, { childList: true, subtree: true });
   installLuckyRuntime();
   installLuckyNotifyRuntime();
@@ -660,6 +679,8 @@
   syncRepliedComments();
 
   // 功能开关挂在油猴菜单里：编辑页、帖子页、列表页都能打开同一个设置框
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('背景与外观', openBackgroundSettings);
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
+    GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
+    GM_registerMenuCommand('背景与外观', openBackgroundSettings);
+  }

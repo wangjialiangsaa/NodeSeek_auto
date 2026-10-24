@@ -152,8 +152,11 @@ function installHomeFeedLoading() {
     if (records.some(record => !record.target.closest?.('.nsit-home-loader,.topic-carousel-panel,.topic-carousel-wrapper'))) schedule();
   });
   observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
-  window.addEventListener('scroll',() => maybeLoad(state),{passive:true});
-  window.addEventListener('resize',() => maybeLoad(state),{passive:true});
+  // Scroll and resize fire many times per frame; measure the loader at most once per frame.
+  let loadFrame = 0;
+  const scheduleLoadCheck = () => { if (!loadFrame) loadFrame = requestAnimationFrame(() => { loadFrame = 0; maybeLoad(state); }); };
+  window.addEventListener('scroll',scheduleLoadCheck,{passive:true});
+  window.addEventListener('resize',scheduleLoadCheck,{passive:true});
   window.addEventListener('popstate',schedule);
   window.addEventListener('pageshow',schedule);
   refresh();

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.77
+// @version      1.4.78
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.77';
+  const VERSION = '1.4.78';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6509,8 +6509,9 @@ function installReplyKeyboard(app) {
     const observer = new MutationObserver(() => {
       if (!app.isConnected) { controller.abort(); observer.disconnect(); return; }
       const uploading = /正在上传/.test(app.querySelector('[data-nsit-image-status]')?.textContent || '');
+      const title = uploading ? '图片上传中，点击查看进度' : '出鸡模板、上传图片、计算器和收鸡模板';
       toggle.toggleAttribute('data-busy', uploading);
-      toggle.title = uploading ? '图片上传中，点击查看进度' : '出鸡模板、上传图片、计算器和收鸡模板';
+      if (toggle.title !== title) toggle.title = title;
       position();
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -7872,10 +7873,11 @@ function installThreadedReading() {
       return true;
     })) schedule();
   });
-  let readTimer = 0;
+  let readTimer = 0, loadFrame = 0;
+  // Scroll fires many times per frame; measure the loader at most once per frame.
   window.addEventListener('scroll', () => {
     scheduleFrame();
-    maybeLoad(state);
+    if (!loadFrame) loadFrame = requestAnimationFrame(() => { loadFrame = 0; maybeLoad(state); });
     clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true),700);
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
@@ -8085,8 +8087,11 @@ function installHomeFeedLoading() {
     if (records.some(record => !record.target.closest?.('.nsit-home-loader,.topic-carousel-panel,.topic-carousel-wrapper'))) schedule();
   });
   observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
-  window.addEventListener('scroll',() => maybeLoad(state),{passive:true});
-  window.addEventListener('resize',() => maybeLoad(state),{passive:true});
+  // Scroll and resize fire many times per frame; measure the loader at most once per frame.
+  let loadFrame = 0;
+  const scheduleLoadCheck = () => { if (!loadFrame) loadFrame = requestAnimationFrame(() => { loadFrame = 0; maybeLoad(state); }); };
+  window.addEventListener('scroll',scheduleLoadCheck,{passive:true});
+  window.addEventListener('resize',scheduleLoadCheck,{passive:true});
   window.addEventListener('popstate',schedule);
   window.addEventListener('pageshow',schedule);
   refresh();
@@ -9171,11 +9176,19 @@ function replyEditor() {
   installCommentListResponseListener();
   const automaticTasks = installAutomaticTasks();
   const authorInfo = installAuthorInfo();
-  const observer = new MutationObserver(() => {
-    stickyHeader.refresh();
+  // 站点任何 DOM 变化都会触发观察器。轻量且需要立即生效的（顶栏、背景、帖子过滤、
+  // 后台任务调度）同步执行；其余入口与标记的渲染合并到下一帧，连续变化每帧最多一轮。
+  // 后台页签不触发 requestAnimationFrame，用定时器兜底。
+  let renderFrame = 0;
+  let renderTimer = 0;
+  function cancelPageRender() {
+    if (renderFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(renderFrame);
+    clearTimeout(renderTimer);
+    renderFrame = 0; renderTimer = 0;
+  }
+  function renderPageEnhancements() {
+    cancelPageRender();
     homeFeedLoading.refresh();
-    automaticTasks.schedule();
-    authorInfo.schedule();
     renderLuckyTrigger();
     runLuckyWriteback();
     showLuckyWritebackResult();
@@ -9186,11 +9199,22 @@ function replyEditor() {
     renderRepliedPostLabels();
     ensurePostFilterTrigger();
     ensureAutomaticTaskTrigger();
+    renderTradeStatusActions();
+  }
+  function schedulePageRender() {
+    if (renderTimer) return;
+    if (typeof requestAnimationFrame === 'function') renderFrame = requestAnimationFrame(renderPageEnhancements);
+    renderTimer = setTimeout(renderPageEnhancements, 200);
+  }
+  const observer = new MutationObserver(() => {
+    stickyHeader.refresh();
+    automaticTasks.schedule();
+    authorInfo.schedule();
     customBackground.refresh();
     filterPostListItems();
-    renderTradeStatusActions();
+    schedulePageRender();
   });
-  window[RUNTIME_KEY] = observer;
+  window[RUNTIME_KEY] = { disconnect() { observer.disconnect(); cancelPageRender(); } };
   observer.observe(document.documentElement, { childList: true, subtree: true });
   installLuckyRuntime();
   installLuckyNotifyRuntime();
@@ -9214,7 +9238,9 @@ function replyEditor() {
   syncRepliedComments();
 
   // 功能开关挂在油猴菜单里：编辑页、帖子页、列表页都能打开同一个设置框
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
-  if (typeof GM_registerMenuCommand === 'function') GM_registerMenuCommand('背景与外观', openBackgroundSettings);
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('功能开关', () => openFeatureFlagDialog(featureFlagHost()));
+    GM_registerMenuCommand('自动任务设置', openAutomaticTaskSettings);
+    GM_registerMenuCommand('背景与外观', openBackgroundSettings);
+  }
 })();

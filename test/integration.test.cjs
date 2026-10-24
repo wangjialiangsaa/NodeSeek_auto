@@ -129,6 +129,18 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     assert.equal(visible,true,'My replies reveals the floor before scrolling');
     assert.equal(fold.getAttribute('aria-expanded'),'true');
   });
+  test(`${file}: page changes filter posts at once and restore entries within a frame`,async t=>{
+    const {w,d}=await setup(t,file);
+    w.localStorage.setItem('nsit-post-filter-rules-v1',JSON.stringify([{id:'r1',keywords:'广告',action:'hide'}]));
+    const list=d.createElement('ul');d.querySelector('main').append(list);
+    list.insertAdjacentHTML('beforeend','<li class="post-list-item"><div class="post-list-content"><div class="post-title"><a href="/post-77-1">广告 帖子</a></div></div></li>');
+    await Promise.resolve();await Promise.resolve();
+    assert.equal(list.firstElementChild.classList.contains('nsit-filter-hidden'),true,'filtering runs in the observer callback, before the next frame');
+    d.querySelector('[data-nsit-automation-entry]').remove();
+    for(let i=0;i<40;i++)d.querySelector('main').append(d.createElement('span'));
+    await pause(60);
+    assert.equal(d.querySelectorAll('[data-nsit-automation-entry]').length,1,'a burst of page changes re-renders entries once, without duplicates');
+  });
 }
 
 test('integrated auto pagination deduplicates and replies through the existing editor',async t=>{

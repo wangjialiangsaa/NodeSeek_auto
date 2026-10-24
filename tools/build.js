@@ -11,6 +11,7 @@ const sourceDir = path.join(root, 'src');
 const assetDir = path.join(root, 'assets', 'vendors');
 const parts = ['config.js', 'ui.js', 'logic.js', 'image-upload.js', 'toolbar.js', 'auto-tasks.js', 'author-info.js', 'threaded.js', 'home-feed.js', 'background.js', 'sticky-header.js', 'main.js'];
 const start = "(function () {\n  'use strict';\n\n";
+const mimeTypes = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
 
 function read(file) {
   return fs.readFileSync(file, 'utf8');
@@ -21,30 +22,12 @@ function write(file, content) {
   fs.writeFileSync(file, content.replace(/\n*$/, '\n'));
 }
 
-function split() {
-  const script = read(output);
-  const headerEnd = script.indexOf('// ==/UserScript==') + '// ==/UserScript=='.length;
-  const bodyStart = script.indexOf(start, headerEnd) + start.length;
-  const bodyEnd = script.lastIndexOf('\n})();');
-  if (headerEnd < '// ==/UserScript=='.length || bodyStart < start.length || bodyEnd < bodyStart) throw new Error('无法识别 userscript 结构。');
-  const body = script.slice(bodyStart, bodyEnd);
-  const configEnd = body.indexOf('  function escapeHtml');
-  const uiEnd = body.indexOf('  function formValues');
-  const logicEnd = body.indexOf('  function initialize()');
-  if ([configEnd, uiEnd, logicEnd].some((index) => index < 0)) throw new Error('无法识别源码分割点。');
-  write(path.join(sourceDir, 'header.txt'), script.slice(0, headerEnd));
-  write(path.join(sourceDir, 'config.js'), body.slice(0, configEnd));
-  write(path.join(sourceDir, 'ui.js'), body.slice(configEnd, uiEnd));
-  write(path.join(sourceDir, 'logic.js'), body.slice(uiEnd, logicEnd));
-  write(path.join(sourceDir, 'main.js'), body.slice(logicEnd));
-}
-
 function buildReadable() {
   const header = read(path.join(sourceDir, 'header.txt')).trimEnd();
   const inlineAsset = (directory, file) => {
     const asset = path.join(directory, file);
     const extension = path.extname(file).slice(1);
-    const mime = extension === 'svg' ? 'image/svg+xml' : extension === 'png' ? 'image/png' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : extension === 'webp' ? 'image/webp' : 'image/x-icon';
+    const mime = mimeTypes[extension] || 'image/x-icon';
     return JSON.stringify(`data:${mime};base64,${fs.readFileSync(asset).toString('base64')}`);
   };
   const body = parts.map((part) => read(path.join(sourceDir, part)).trim()).join('\n\n')
@@ -68,6 +51,5 @@ async function build() {
 }
 
 const command = process.argv[2];
-if (command === 'split') split();
-else if (command === 'build') build().catch((error) => { throw error; });
-else throw new Error('用法：node tools/build.js <split|build>');
+if (command === 'build') build().catch((error) => { console.error(error); process.exitCode = 1; });
+else throw new Error('用法：node tools/build.js build');

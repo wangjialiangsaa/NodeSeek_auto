@@ -934,10 +934,11 @@ function installThreadedReading() {
       return true;
     })) schedule();
   });
-  let readTimer = 0;
+  let readTimer = 0, loadFrame = 0;
+  // Scroll fires many times per frame; measure the loader at most once per frame.
   window.addEventListener('scroll', () => {
     scheduleFrame();
-    maybeLoad(state);
+    if (!loadFrame) loadFrame = requestAnimationFrame(() => { loadFrame = 0; maybeLoad(state); });
     clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true),700);
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });

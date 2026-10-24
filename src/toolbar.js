@@ -91,8 +91,9 @@
     const observer = new MutationObserver(() => {
       if (!app.isConnected) { controller.abort(); observer.disconnect(); return; }
       const uploading = /正在上传/.test(app.querySelector('[data-nsit-image-status]')?.textContent || '');
+      const title = uploading ? '图片上传中，点击查看进度' : '出鸡模板、上传图片、计算器和收鸡模板';
       toggle.toggleAttribute('data-busy', uploading);
-      toggle.title = uploading ? '图片上传中，点击查看进度' : '出鸡模板、上传图片、计算器和收鸡模板';
+      if (toggle.title !== title) toggle.title = title;
       position();
     });
     observer.observe(document.body, { childList: true, subtree: true });
