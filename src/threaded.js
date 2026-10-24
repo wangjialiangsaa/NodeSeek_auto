@@ -57,7 +57,7 @@ function installThreadedReading() {
     .nst-pagination-hidden { display:none !important; }
     .nst-loaded-menu { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:14px; font-size:12px; }
     .nst-loaded-menu button,.nst-loaded-menu a { color:inherit; background:none; border:0; padding:3px 0; font:inherit; cursor:pointer; text-decoration:none; }
-    #editor.nst-fixed-editor { position:fixed !important; left:var(--nst-editor-left,12px) !important; bottom:0 !important; top:auto !important; width:var(--nst-editor-width,calc(100% - 24px)) !important; max-height:min(65vh,460px); z-index:900; background:var(--bg-main-color,#fff); border:1px solid #8884; border-radius:9px 9px 0 0; box-shadow:0 -4px 24px #0002; overflow:auto; margin:0 !important; box-sizing:border-box; }
+    #editor.nst-fixed-editor { position:fixed !important; left:var(--nst-editor-left,12px) !important; bottom:var(--nst-keyboard-inset,0px) !important; top:auto !important; width:var(--nst-editor-width,calc(100% - 24px)) !important; max-height:min(65vh,460px); max-height:min(65vh,460px,calc(var(--nst-visible-height,100vh) - 8px)); z-index:900; background:var(--bg-main-color,#fff); border:1px solid #8884; border-radius:9px 9px 0 0; box-shadow:0 -4px 24px #0002; overflow:auto; margin:0 !important; box-sizing:border-box; }
     #editor.nst-fixed-editor > .md-editor { position:static !important; width:100% !important; top:auto !important; left:auto !important; margin:0 !important; transform:none !important; }
     .nst-editor-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; min-height:42px; font-size:13px; background:var(--bg-main-color,#fff); }
     .nst-editor-head button { padding:4px 10px; border:1px solid #8885; border-radius:5px; background:transparent; font:inherit; color:inherit; cursor:pointer; }
@@ -143,7 +143,8 @@ function installThreadedReading() {
 
   function pageWindow() { return typeof unsafeWindow !== 'undefined' ? unsafeWindow : window; }
   function codeMirror() { return pageWindow().document.querySelector('#editor .CodeMirror')?.CodeMirror; }
-  const expandReplyLabel = '展开回复 · Ctrl+Enter';
+  // Touch devices have no Ctrl+Enter, so the hint only appears with a fine pointer.
+  const expandReplyLabel = window.matchMedia?.('(pointer: coarse)').matches ? '展开回复' : '展开回复 · Ctrl+Enter';
   function openEditor(s, focus = false) {
     if (!s?.editor) return;
     s.editor.classList.remove('nst-editor-collapsed');
@@ -167,6 +168,13 @@ function installThreadedReading() {
     // property write restyles the whole page.
     setStyleVar(s.editor,'--nst-editor-left',`${left}px`);
     setStyleVar(s.editor,'--nst-editor-width',`${width}px`);
+    // Mobile keyboards shrink only the visual viewport, which would cover a bottom-fixed
+    // editor. Lift it above the keyboard and cap it to the visible height.
+    // Pinch zoom also shrinks the visual viewport; only an unzoomed page means a keyboard.
+    const visual = window.visualViewport && Math.abs((window.visualViewport.scale || 1) - 1) < 0.01 ? window.visualViewport : null;
+    const keyboard = visual ? Math.max(0, Math.round(window.innerHeight - visual.height - visual.offsetTop)) : 0;
+    setStyleVar(s.editor,'--nst-keyboard-inset',`${keyboard}px`);
+    setStyleVar(s.editor,'--nst-visible-height',`${Math.round(visual?.height || window.innerHeight)}px`);
     const height = Math.ceil(s.editor.getBoundingClientRect().height || 48);
     if (s.editorSpacer.style.height !== `${height + 16}px`) s.editorSpacer.style.height = `${height + 16}px`;
     setStyleVar(document.documentElement,'--nst-dock-height',`${height + 16}px`);
@@ -961,6 +969,9 @@ function installThreadedReading() {
     clearTimeout(readTimer); readTimer = setTimeout(() => updateFrame(true,true),700);
   }, { passive:true });
   window.addEventListener('resize',scheduleFrame,{ passive:true });
+  // The on-screen keyboard resizes and pans the visual viewport without a window resize.
+  window.visualViewport?.addEventListener('resize',() => scheduleFrame(),{ passive:true });
+  window.visualViewport?.addEventListener('scroll',() => scheduleFrame(false),{ passive:true });
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || event.key !== 'Enter' || !event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.isComposing || event.keyCode === 229) return;
     const s = state, current = route();

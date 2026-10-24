@@ -91,16 +91,49 @@
 
     button.addEventListener('click', () => { picker.value = ''; picker.click(); });
     picker.addEventListener('change', () => { start(picker.files); picker.value = ''; });
-    scope.addEventListener('paste', event => {
-      if (app.contains(event.target)) return;
+
+    // Some phone clipboards and file managers hand over images without a MIME type.
+    const imageName = /\.(?:png|jpe?g|gif|webp|bmp|avif|heic|heif)$/i;
+    const isImage = file => Boolean(file) && (file.type ? file.type.startsWith('image/') : imageName.test(file.name || ''));
+    // The uploader requires a MIME type, so restore it from the extension.
+    const typed = file => file.type ? file : new File([file], file.name, { type: `image/${file.name.split('.').pop().toLowerCase().replace('jpg', 'jpeg')}` });
+    function transferImages(data) {
+      if (!data) return [];
+      let files = Array.from(data.items || []).filter(item => item.kind === 'file').map(item => item.getAsFile()).filter(isImage);
+      if (!files.length) files = Array.from(data.files || []).filter(isImage);
+      if (files.length) return files.map(typed);
+      // Rich text copied from some apps carries the picture only as an inline data: image.
+      const html = typeof data.getData === 'function' ? data.getData('text/html') : '';
+      const sources = Array.from(html.matchAll(/<img[^>]+src=["'](data:image\/[a-z0-9.+-]+;base64,[^"']+)["']/gi), match => match[1]);
+      return sources.map((source, index) => {
+        try {
+          const [, type, body] = source.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+          const bytes = Uint8Array.from(atob(body), char => char.charCodeAt(0));
+          return new File([bytes], `pasted-${Date.now()}-${index}.${type.split('/')[1].replace('jpeg', 'jpg').replace(/\+.*/, '')}`, { type });
+        } catch (_) { return null; }
+      }).filter(Boolean);
+    }
+    // The editor may be CodeMirror (textarea or, on phones, contenteditable input) or a plain textarea.
+    function inEditor(node) {
       const target = editor();
-      if (!target || !(target.cm ? event.target.closest?.('.CodeMirror') : event.target === target.textarea)) return;
-      const data = event.clipboardData;
-      let files = Array.from(data?.items || []).filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean);
-      if (!files.length) files = Array.from(data?.files || []).filter(file => file.type.startsWith('image/'));
+      if (!target || !node || app.contains(node)) return false;
+      return target.cm ? Boolean(node.closest?.('.CodeMirror')) : node === target.textarea;
+    }
+    function takeImages(event, data) {
+      if (!inEditor(event.target)) return;
+      const files = transferImages(data);
       if (!files.length) return;
       event.preventDefault(); event.stopImmediatePropagation();
       start(files);
+    }
+    scope.addEventListener('paste', event => takeImages(event, event.clipboardData), listenerOptions);
+    scope.addEventListener('drop', event => takeImages(event, event.dataTransfer), listenerOptions);
+    scope.addEventListener('dragover', event => {
+      if (inEditor(event.target) && Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
+    }, listenerOptions);
+    // Phone keyboards insert clipboard pictures as rich content: no paste event, only beforeinput.
+    scope.addEventListener('beforeinput', event => {
+      if (['insertFromPaste', 'insertFromDrop', 'insertReplacementText'].includes(event.inputType)) takeImages(event, event.dataTransfer);
     }, listenerOptions);
 
     // Keep temporary upload markers out of published posts, including Ctrl+Enter.

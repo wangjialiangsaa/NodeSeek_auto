@@ -162,7 +162,7 @@ test('own threads and already replied threads are skipped',async t=>{
 test('reply checks later thread pages and skips an older reply outside loaded comments',async t=>{
   let resolvePage;const pending=new Promise(resolve=>{resolvePage=resolve;});
   const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:url=>String(url).endsWith('-1')?{ok:true,text:async()=>threadPage(123,{next:true})}:pending});
-  const run=h.install().run();await tick();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,2);
+  const run=h.install().run();for(let i=0;i<200&&h.threadRequests.length<2;i++)await tick();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,2);
   resolvePage({ok:true,status:200,text:async()=>threadPage(123,{page:2,author:7})});
   await run;assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
 });
@@ -286,4 +286,38 @@ test('no login, disabled attendance, or missing task lock causes no attendance r
   const a=setup(t,{uid:0,settings:{dailyCheckin:true}});await a.install().run();assert.equal(a.requests.length,0);
   const b=setup(t);await b.install().run();assert.equal(b.requests.length,0);
   const c=setup(t,{settings:{dailyCheckin:true}});Object.defineProperty(c.w.navigator,'locks',{value:undefined});await c.install().run();assert.equal(c.requests.length,0);
+});
+
+for(const [name,link] of [
+  ['an http link',`http://www.nodeseek.com/lucky?post=123&time=${future}&count=1`],
+  ['a link without www',`https://nodeseek.com/lucky?post=123&time=${future}&count=1`],
+  ['a /lucky/ path',`https://www.nodeseek.com/lucky/?post=123&time=${future}&count=1`],
+  ['a relative link',`/lucky?post=123&time=${future}&count=1&start=1&duplicate=false&mode=view`],
+  ['an &amp; escaped link',`https://www.nodeseek.com/lucky?post=123&amp;time=${future}&amp;count=1`],
+])test(`auto reply recognizes ${name}`,async t=>{
+  const h=setup(t,{link:link.replace(/&/g,'&amp;'),settings:{dailyCheckin:false,autoReply:true,replyText:'参与'}});
+  await h.install().run();assert.deepEqual(h.posts,['参与'],JSON.stringify(h.runtime.status));
+});
+
+test('auto reply recognizes a lottery link written as plain text or code',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'}});
+  h.d.querySelector('.post-content').innerHTML=`开奖：<code>https://www.nodeseek.com/lucky?post=123&amp;time=${future}&amp;count=1</code>`;
+  h.w.__config__.postData.comments[0].markdown='见正文';
+  await h.install().run();assert.deepEqual(h.posts,['参与'],JSON.stringify(h.runtime.status));
+});
+
+test('a bare lottery path inside another site URL is not treated as this site',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'}});
+  h.d.querySelector('.post-content').textContent=`https://example.com/lucky?post=123&time=${future}`;
+  h.w.__config__.postData.comments[0].markdown=`https://example.com/lucky?post=123&time=${future}`;
+  await h.install().run();assert.equal(h.posts.length,0);
+});
+
+test('auto reply on a later page reads the lottery link from page one',async t=>{
+  const link=`https://www.nodeseek.com/lucky?post=123&amp;time=${future}&amp;count=1`;
+  const h=setup(t,{url:'https://www.nodeseek.com/post-123-2',settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},
+    threadFetch:async url=>({ok:true,status:200,url:String(url),text:async()=>`<div class="content-item" id="0"><div class="post-content"><a href="${link}">开奖</a></div></div>`+threadPage(123,{page:Number(String(url).split('-').at(-1))})})});
+  h.d.querySelector('.content-item[id="0"]').remove();
+  h.w.__config__.postData.comments=[];
+  await h.install().run();assert.deepEqual(h.posts,['参与'],JSON.stringify(h.runtime.status));
 });

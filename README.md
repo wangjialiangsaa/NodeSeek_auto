@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.80**。本版大幅降低毛玻璃背景的显卡占用（面板改用预先模糊的壁纸，滚动时不再实时模糊），并降低帖子页滚动时的脚本开销，功能与外观不变。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.81**。本版改进抽奖链接识别（http、不带 www、/lucky/、纯文本或代码块里的开奖链接，以及从第 2 页以后进入抽奖帖），自动回复核实时放慢翻页以免触发站点人机验证；手机端修正弹窗宽度、地址栏遮挡和键盘挡住底部回复栏，触屏上扩大小按钮点击区域；图片支持拖放、手机键盘插图、无类型图片和富文本内嵌图片的粘贴上传。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 如已单独创建“NodeSeek auto AI test”测试脚本，请在油猴中停用或删除；正式版不包含 AI 功能。
 

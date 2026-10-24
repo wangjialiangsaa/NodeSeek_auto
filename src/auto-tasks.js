@@ -1,5 +1,6 @@
   const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
   const AUTO_TASK_RUNTIME_KEY = '__nsitAutomaticTasks__';
+  const AUTO_TASK_PAGE_GAP_MS = 400;
 
   function autoTaskRead(key, fallback = null) {
     try {
@@ -38,7 +39,7 @@
   function openAutomaticTaskSettings() {
     let dialog = document.querySelector('[data-nsit-auto-dialog]');
     if (!dialog) {
-      injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
+      injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{box-sizing:border-box;width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
       dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
@@ -97,17 +98,43 @@
     }));
   }
 
-  function automaticTaskDraw(postId) {
+  // 开奖链接只认本站 /lucky 且 post 指向当前帖、开奖时间未到。作者常写成 http、
+  // 不带 www、/lucky/、被转义成 &amp; 的地址，或只贴纯文本 / 代码块而没有生成链接。
+  function automaticTaskParseDraw(raw, postId) {
+    let url;
+    try { url = new URL(String(raw || '').trim().replace(/&amp;/gi, '&'), location.href); } catch (_) { return null; }
+    if (!/^https?:$/.test(url.protocol) || !['nodeseek.com', 'www.nodeseek.com'].includes(url.hostname) || url.pathname.replace(/\/+$/, '') !== '/lucky' || url.searchParams.get('post') !== postId) return null;
+    url.protocol = 'https:'; url.pathname = '/lucky';
+    const draw = luckyParseLinkFromText(url.href);
+    return draw && draw.time > Date.now() ? draw : null;
+  }
+
+  function automaticTaskDrawCandidates(postId) {
+    const candidates = [];
+    // Full URLs are validated by host below; a bare path must not be the tail of another site's URL.
+    const linkPattern = /(?:https?:\/\/[^\s<>"'`)\]）】，。；]+|(?<![\w.:/-])\/lucky\/?\?[^\s<>"'`)\]）】，。；]+)/gi;
     const first = luckyFirstFloor();
-    const links = Array.from(first?.querySelectorAll('.post-content a[href]') || []);
-    for (const link of links) {
-      let url;
-      try { url = new URL(link.getAttribute('href'), location.href); } catch (_) { continue; }
-      if (url.protocol !== 'https:' || !['nodeseek.com', 'www.nodeseek.com'].includes(url.hostname) || url.pathname !== '/lucky' || url.searchParams.get('post') !== postId) continue;
-      const draw = luckyParseLinkFromText(url.href);
-      if (draw && draw.time > Date.now()) return draw;
+    const content = first?.querySelector('.post-content') || first;
+    if (content) {
+      for (const link of content.querySelectorAll('a[href]')) candidates.push(link.getAttribute('href'));
+      candidates.push(...(content.textContent.match(linkPattern) || []));
     }
-    return null;
+    const data = automaticTaskPageWindow().__config__?.postData;
+    if (String(data?.postId || '') === postId && Array.isArray(data.comments)) {
+      const floor = data.comments.find(item => Number(item?.floorIndex) === 0);
+      candidates.push(...(String(floor?.markdown || '').match(linkPattern) || []));
+    }
+    return candidates;
+  }
+
+  function automaticTaskDraw(postId) {
+    for (const candidate of automaticTaskDrawCandidates(postId)) {
+      const draw = automaticTaskParseDraw(candidate, postId);
+      if (draw) return draw;
+    }
+    // 不在第一页时 0 楼不在页面上：用 resolveCurrentDraw 补拉第一页得到的开奖参数。
+    const cached = luckyDrawCache.postId === postId ? luckyDrawCache.draw : null;
+    return cached && cached.postId === postId && cached.time > Date.now() ? cached : null;
   }
 
   function installAutomaticTasks({ autoStart = true } = {}) {
@@ -155,9 +182,13 @@
         // 查当前帖的完整评论，而不是要求读完账号的全部历史评论。
         for (let page = 1; ; page += 1) {
           status('reply', `正在核实本帖第 ${page} 页回复…`);
+          // 连续抓取多页会触发站点的人机验证，页与页之间稍作间隔。
+          if (page > 1) await new Promise(resolve => setTimeout(resolve, AUTO_TASK_PAGE_GAP_MS));
+          if (disposed) return false;
           const path = `/post-${postId}-${page}`;
           const { response, payload } = await request(path, { cache: 'no-store' }, 'text');
           if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) return false;
+          if ([403, 429, 503].includes(response.status) || /<title>\s*(?:Just a moment|请稍候)/i.test(payload)) throw new Error('站点人机验证或限流拦截了核实请求');
           const finalURL = new URL(response.url || path, location.href);
           if (!response.ok || finalURL.origin !== location.origin || finalURL.pathname.replace(/\/$/, '') !== path) throw new Error('本帖回复页面加载失败');
           const doc = new DOMParser().parseFromString(payload, 'text/html');
@@ -220,6 +251,8 @@
           status('reply', '本帖已回复，已跳过'); return;
         }
         if (record) { status('reply', record.state === 'done' ? '本帖已自动回复' : '本帖已尝试提交，请检查网页确认结果；不会重复发送'); return; }
+        // 不在第一页时先补拉第一页的开奖参数
+        if (!luckyFirstFloor()) await resolveCurrentDraw();
         const draw = automaticTaskDraw(postId);
         if (!draw) { status('reply', '本页未检测到当前帖的有效抽奖链接'); return; }
         if (luckyIsOwnDraw()) { status('reply', '自己发起的抽奖，已跳过'); return; }

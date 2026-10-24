@@ -197,3 +197,49 @@ test('multiple failures restore the whole selected draft without extra separator
   h.input.setSelectionRange(0,4);h.paste([h.file('one.png'),h.file('two.png')]);await tick();await tick();
   assert.equal(h.value(),'left right');
 });
+
+const transferEvent=(w,type,data,extra={})=>{
+  const event=new w.Event(type,{bubbles:true,cancelable:true});
+  Object.defineProperty(event,type==='paste'?'clipboardData':'dataTransfer',{value:data});
+  for(const [key,value] of Object.entries(extra))Object.defineProperty(event,key,{value});
+  return event;
+};
+const okUpload=options=>{
+  if(options.method==='GET')queueMicrotask(()=>options.onload({status:200,response:{api_key:'key'}}));
+  else queueMicrotask(()=>options.onload({status:200,response:{success:true,links:{markdown:'![p](https://nodeimage.com/p.png)'}}}));
+};
+const transfer=(files,html='')=>({items:files.map(f=>({kind:'file',type:f.type,getAsFile:()=>f})),files,types:files.length?['Files']:['text/html'],getData:type=>type==='text/html'?html:''});
+
+test('dropping an image onto the editor uploads it; dropping text is left alone',async t=>{
+  const h=setup(t,{request:okUpload});
+  const text=transferEvent(h.w,'drop',transfer([],'<b>hi</b>'));h.input.dispatchEvent(text);
+  assert.equal(text.defaultPrevented,false);
+  const over=transferEvent(h.w,'dragover',transfer([h.file('drag.png')]));h.input.dispatchEvent(over);
+  assert.equal(over.defaultPrevented,true,'the editor accepts dragged files');
+  const drop=transferEvent(h.w,'drop',transfer([h.file('drag.png')]));h.input.dispatchEvent(drop);
+  assert.equal(drop.defaultPrevented,true);await tick();await tick();
+  assert.equal(h.requests.at(-1).data.get('image').name,'drag.png');
+  assert.match(h.value(),/!\[p\]\(https:\/\/nodeimage\.com\/p\.png\)/);
+});
+
+test('phone keyboards inserting a picture through beforeinput are uploaded',async t=>{
+  const h=setup(t,{request:okUpload});
+  const event=transferEvent(h.w,'beforeinput',transfer([h.file('keyboard.png')]),{inputType:'insertFromPaste'});
+  h.input.dispatchEvent(event);assert.equal(event.defaultPrevented,true);await tick();await tick();
+  assert.equal(h.requests.at(-1).data.get('image').name,'keyboard.png');
+  const typing=transferEvent(h.w,'beforeinput',null,{inputType:'insertText'});h.input.dispatchEvent(typing);
+  assert.equal(typing.defaultPrevented,false,'ordinary typing is untouched');
+});
+
+test('clipboard images without a MIME type or only as inline data are uploaded',async t=>{
+  const h=setup(t,{request:okUpload});
+  const untyped=new h.w.File(['x'],'IMG_0001.JPG',{type:''});
+  assert.equal(h.input.dispatchEvent(transferEvent(h.w,'paste',transfer([untyped]))),false);await tick();await tick();
+  assert.equal(h.requests.at(-1).data.get('image').name,'IMG_0001.JPG');
+  const inline=transferEvent(h.w,'paste',transfer([],'<p><img src="data:image/png;base64,aGVsbG8="></p>'));
+  h.input.dispatchEvent(inline);assert.equal(inline.defaultPrevented,true);await tick();await tick();
+  const uploaded=h.requests.at(-1).data.get('image');
+  assert.equal(uploaded.type,'image/png');assert.match(uploaded.name,/^pasted-\d+-0\.png$/);
+  const notImage=new h.w.File(['x'],'notes.txt',{type:''});
+  assert.equal(h.input.dispatchEvent(transferEvent(h.w,'paste',transfer([notImage]))),true,'other files keep native paste');
+});

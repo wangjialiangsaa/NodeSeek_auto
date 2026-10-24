@@ -1004,3 +1004,22 @@ test('pending floor navigation retains a later hashchange until its hidden targe
   assert.equal(d.getElementById('11').classList.contains('nst-branch-hidden'),true);
   assert.deepEqual(scrolls,[{floor:'11',visible:true}],'the completed navigation is not replayed');
 });
+
+test('the docked editor rises above a phone keyboard and drops the Ctrl+Enter hint on touch screens', async t => {
+  const listeners = {};
+  const viewport = { height: 800, offsetTop: 0, scale: 1, addEventListener(type, fn) { listeners[type] = fn; } };
+  const { w, d } = await setup(t, reply(1, 'one'), { editor:true, init(win) {
+    Object.defineProperty(win, 'innerHeight', { configurable:true, value:800 });
+    win.visualViewport = viewport;
+    win.matchMedia = query => ({ matches: query === '(pointer: coarse)', addEventListener() {}, removeEventListener() {} });
+  } });
+  const editor = d.getElementById('editor');
+  assert.equal(d.querySelector('.nst-editor-toggle').textContent, '展开回复');
+  assert.equal(editor.style.getPropertyValue('--nst-keyboard-inset'), '0px');
+  viewport.height = 460; listeners.resize(); await pause(40);
+  assert.equal(editor.style.getPropertyValue('--nst-keyboard-inset'), '340px');
+  assert.equal(editor.style.getPropertyValue('--nst-visible-height'), '460px');
+  viewport.scale = 2; listeners.resize(); await pause(40);
+  assert.equal(editor.style.getPropertyValue('--nst-keyboard-inset'), '0px', 'pinch zoom is not a keyboard');
+  assert.ok(w);
+});
