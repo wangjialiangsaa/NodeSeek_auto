@@ -24,16 +24,20 @@ jobs:
       - name: Install build dependencies
         run: npm ci
       - name: Build userscript
-        run: node tools/build.js build
+        run: |
+          node tools/build.js build
+          node experiments/build-ai-test.cjs
       - name: Test userscript integration and catalog worker
         run: npm test
       - name: Verify generated script
         run: |
           node --check 'NodeSeek Issue Templates.user.js'
           node --check 'NodeSeek Issue Templates.min.user.js'
+          node --check 'experiments/NodeSeek-auto-AI-test.user.js'
           git diff --check
           git ls-files --error-unmatch -- 'NodeSeek Issue Templates.min.user.js'
           git diff --exit-code -- 'NodeSeek Issue Templates.user.js' 'NodeSeek Issue Templates.min.user.js'
+          git diff --exit-code -- 'experiments/NodeSeek-auto-AI-test.user.js'
       - name: Upload userscript artifact
         uses: actions/upload-artifact@v4
         with:
