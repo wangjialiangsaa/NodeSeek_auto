@@ -10,6 +10,9 @@ function threadPage(postId=123,{page=1,next=false,author=8}={}) {
   return `<div class="post-title"><h1><a href="/post-${postId}-1">抽奖帖</a></h1></div><ul class="comments"><li class="content-item" id="${(page-1)*10+1}"><a class="author-name" href="/space/${author}">用户</a><article class="post-content">参与</article></li></ul><nav aria-label="pagination"><span class="pager-cur" href="/post-${postId}-${page}">${page}</span>${next?`<a href="/post-${postId}-${page+1}" rel="next">下一页</a>`:''}</nav>`;
 }
 
+// The open page is checked in place; tests that exercise fetching open the post on a page beyond the thread.
+const away="https://www.nodeseek.com/post-123-99";
+
 function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,threadFetch,confirmReply=true}={}) {
   const postId=Number(new URL(url).pathname.match(/post-(\d+)/)?.[1]||123);
   const href=link??`https://www.nodeseek.com/lucky?post=123&time=${future}&count=1&start=1`;
@@ -161,7 +164,7 @@ test('own threads and already replied threads are skipped',async t=>{
 
 test('reply checks later thread pages and skips an older reply outside loaded comments',async t=>{
   let resolvePage;const pending=new Promise(resolve=>{resolvePage=resolve;});
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:url=>String(url).endsWith('-1')?{ok:true,text:async()=>threadPage(123,{next:true})}:pending});
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:url=>String(url).endsWith('-1')?{ok:true,text:async()=>threadPage(123,{next:true})}:pending});
   const run=h.install().run();for(let i=0;i<200&&h.threadRequests.length<2;i++)await tick();assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,2);
   resolvePage({ok:true,status:200,text:async()=>threadPage(123,{page:2,author:7})});
   await run;assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
@@ -169,17 +172,17 @@ test('reply checks later thread pages and skips an older reply outside loaded co
 
 test('thread verification follows pages and blocks replies on failed or unrelated pages',async t=>{
   const settings={dailyCheckin:false,autoReply:true,replyText:'谢谢'};
-  const a=setup(t,{settings,threadFetch:async url=>{const page=Number(String(url).split('-').at(-1));return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<2})};}});
+  const a=setup(t,{url:away,settings,threadFetch:async url=>{const page=Number(String(url).split('-').at(-1));return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<2})};}});
   await a.install().run();assert.equal(a.threadRequests.length,2);assert.equal(a.posts.length,1);
   assert.deepEqual(a.threadRequests.map(([url])=>url),['/post-123-1','/post-123-2']);
-  const b=setup(t,{settings,threadFetch:async()=>({ok:false,status:503,text:async()=>''})});
+  const b=setup(t,{url:away,settings,threadFetch:async()=>({ok:false,status:503,text:async()=>''})});
   const runtime=b.install();await runtime.run();await runtime.run();assert.equal(b.posts.length,0);assert.equal(b.threadRequests.length,1);
-  const c=setup(t,{settings,threadFetch:async()=>({ok:true,status:200,text:async()=>threadPage(999)})});
+  const c=setup(t,{url:away,settings,threadFetch:async()=>({ok:true,status:200,text:async()=>threadPage(999)})});
   await c.install().run();assert.equal(c.posts.length,0);
 });
 
 test('a previous reply beyond ten thread pages still prevents automatic posting',async t=>{
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
     const page=Number(String(url).split('-').at(-1));
     return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<11,author:page===11?7:8})};
   }});
@@ -195,12 +198,12 @@ for(const [name,response] of [
   ['empty partial page',{ok:true,text:async()=>'<div class="post-title"><a href="/post-123-1">抽奖帖</a></div><ul class="comments"></ul>'}],
 ])test(`thread verification skips ${name}`,async t=>{
   let calls=0;
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async()=>++calls===1?{ok:true,text:async()=>threadPage(123,{next:true})}:response});
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async()=>++calls===1?{ok:true,text:async()=>threadPage(123,{next:true})}:response});
   await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
 });
 
 test('known later pages are still checked when their next link disappears from a fetched page',async t=>{
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:async url=>{
     const page=Number(String(url).split('-').at(-1));
     return {ok:true,text:async()=>threadPage(123,{page,author:page===2?7:8})};
   }});
@@ -209,12 +212,12 @@ test('known later pages are still checked when their next link disappears from a
 });
 
 test('a complete first page with no comments can receive the first reply',async t=>{
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},threadFetch:async()=>({ok:true,text:async()=>threadPage().replace(/<li[\s\S]*<\/li>/,'')})});
-  await h.install().run();assert.deepEqual(h.posts,['参与']);
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},threadFetch:async()=>({ok:true,text:async()=>threadPage().replace(/<li[\s\S]*<\/li>/,'')})});
+  await h.install().run();assert.deepEqual(h.posts,["参与"],JSON.stringify([h.runtime.status,h.threadRequests.map(r=>r[0])]));
 });
 
 test('typing a draft while thread verification loads preserves it and cancels automatic posting',async t=>{
-  let resolvePage;const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:()=>new Promise(resolve=>{resolvePage=resolve;})});
+  let resolvePage;const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:()=>new Promise(resolve=>{resolvePage=resolve;})});
   const run=h.install().run();await tick();h.input.value='正在输入的新草稿';
   assert.equal(h.threadRequests.length,1);
   resolvePage({ok:true,status:200,text:async()=>threadPage()});await run;
@@ -320,4 +323,27 @@ test('auto reply on a later page reads the lottery link from page one',async t=>
   h.d.querySelector('.content-item[id="0"]').remove();
   h.w.__config__.postData.comments=[];
   await h.install().run();assert.deepEqual(h.posts,['参与'],JSON.stringify(h.runtime.status));
+});
+
+test('a single-page thread is verified in place without fetching it again',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'}});
+  await h.install().run();assert.deepEqual(h.posts,['参与']);assert.equal(h.threadRequests.length,0);
+});
+
+test('other thread pages are fetched concurrently and the open page is skipped',async t=>{
+  const resolvers=[];
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},threadFetch:url=>new Promise(resolve=>resolvers.push(()=>resolve({ok:true,status:200,text:async()=>threadPage(123,{page:Number(String(url).split('-').at(-1))})})))});
+  const pager=h.d.createElement('nav');pager.setAttribute('aria-label','pagination');pager.innerHTML='<a href="/post-123-2">2</a><a href="/post-123-4">4</a>';h.d.body.append(pager);
+  const run=h.install().run();
+  for(let i=0;i<200&&h.threadRequests.length<3;i++)await tick();
+  assert.deepEqual(h.threadRequests.map(([url])=>url),['/post-123-2','/post-123-3','/post-123-4']);
+  while(resolvers.length)resolvers.shift()();
+  await run;assert.deepEqual(h.posts,['参与']);
+});
+
+test('a slow check-in does not hold back the automatic reply',async t=>{
+  let finish;const h=setup(t,{settings:{dailyCheckin:true,autoReply:true,replyText:'参与'},fetch:()=>new Promise(resolve=>{finish=resolve;})});
+  const run=h.install().run();for(let i=0;i<50&&!h.posts.length;i++)await tick();
+  assert.deepEqual(h.posts,['参与']);
+  finish({ok:true,status:200,json:async()=>({success:true,message:'签到成功'})});await run;
 });

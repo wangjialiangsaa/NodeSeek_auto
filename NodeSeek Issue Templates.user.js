@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.81
+// @version      1.4.82
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.81';
+  const VERSION = '1.4.82';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6560,7 +6560,8 @@ function installReplyKeyboard(app) {
 
 const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
   const AUTO_TASK_RUNTIME_KEY = '__nsitAutomaticTasks__';
-  const AUTO_TASK_PAGE_GAP_MS = 400;
+  const AUTO_TASK_PAGE_CONCURRENCY = 3;
+  const AUTO_TASK_PAGE_STAGGER_MS = 120;
 
   function autoTaskRead(key, fallback = null) {
     try {
@@ -6728,8 +6729,9 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     async function verifyThreadReplies(uid, postId) {
       const key = `${uid}-${postId}`;
       if (replyRetryAt.get(key) > Date.now()) { status('reply', '本帖回复暂无法核实，稍后重试；不会自动发送'); return false; }
+      let stop = false;
       try {
-        let lastPage = 1;
+        let lastPage = 1, next = 1, checked = 0, found = false;
         function includePages(doc) {
           for (const link of doc.querySelectorAll('[aria-label="pagination"] [href]')) {
             if (link.closest('.post-content')) continue;
@@ -6739,15 +6741,13 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
           }
         }
         includePages(document);
+        // 当前页已在页面上，由 automaticTaskHasReply 检查，不再重复抓取。
+        const here = currentPostPage();
         // 查当前帖的完整评论，而不是要求读完账号的全部历史评论。
-        for (let page = 1; ; page += 1) {
-          status('reply', `正在核实本帖第 ${page} 页回复…`);
-          // 连续抓取多页会触发站点的人机验证，页与页之间稍作间隔。
-          if (page > 1) await new Promise(resolve => setTimeout(resolve, AUTO_TASK_PAGE_GAP_MS));
-          if (disposed) return false;
+        async function check(page) {
           const path = `/post-${postId}-${page}`;
           const { response, payload } = await request(path, { cache: 'no-store' }, 'text');
-          if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) return false;
+          if (stop || disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) { stop = true; return; }
           if ([403, 429, 503].includes(response.status) || /<title>\s*(?:Just a moment|请稍候)/i.test(payload)) throw new Error('站点人机验证或限流拦截了核实请求');
           const finalURL = new URL(response.url || path, location.href);
           if (!response.ok || finalURL.origin !== location.origin || finalURL.pathname.replace(/\/$/, '') !== path) throw new Error('本帖回复页面加载失败');
@@ -6757,7 +6757,8 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
           if (!list || titleURL.origin !== location.origin || !new RegExp(`^/post-${postId}-\\d+/?$`).test(titleURL.pathname)) throw new Error('未取得本帖回复，请检查站点登录或验证');
           const pager = Array.from(doc.querySelectorAll('[aria-label="pagination"]')).find(node => !node.closest('.post-content'));
           const current = pager?.querySelector('.pager-cur[href]')?.getAttribute('href');
-          if (!current || new URL(current, location.href).pathname.replace(/\/$/, '') !== path) throw new Error('本帖回复分页不完整');
+          // 只有一页的帖子不显示分页条；有分页条时当前页必须对得上。
+          if (pager ? !current || new URL(current, location.href).pathname.replace(/\/$/, '') !== path : page !== 1) throw new Error('本帖回复分页不完整');
           includePages(doc);
           const ownReplies = [];
           for (const item of list.querySelectorAll(':scope > .content-item')) {
@@ -6766,11 +6767,27 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
             if (!/^\d+$/.test(item.id) || Number(item.id) < 1 || !author || authorURL.origin !== location.origin || !/^\/space\/\d+\/?$/.test(authorURL.pathname)) throw new Error('本帖回复信息不完整');
             if (authorURL.pathname.replace(/\/$/, '') === `/space/${uid}`) ownReplies.push({ post_id: Number(postId), floor_id: Number(item.id) });
           }
-          if (ownReplies.length) mergeRepliedComments({ success: true, comments: ownReplies });
-          if (ownReplies.length || automaticTaskHasReply(uid, postId)) { status('reply', '本帖已有回复，已跳过'); return false; }
-          if (page >= lastPage) return true;
+          if (ownReplies.length) { mergeRepliedComments({ success: true, comments: ownReplies }); found = true; }
+          checked += 1;
+          if (!found) status('reply', `正在核实本帖回复（${checked}/${Math.max(lastPage - (here <= lastPage ? 1 : 0), checked)} 页）…`);
         }
+        // 少量并发抓取其余页；错开起步，避免瞬间请求过多触发人机验证。
+        async function worker(index) {
+          if (index) await new Promise(resolve => setTimeout(resolve, index * AUTO_TASK_PAGE_STAGGER_MS));
+          while (!stop && !found && !disposed) {
+            while (next === here) next += 1;
+            if (next > lastPage) return;
+            const page = next++;
+            try { await check(page); } catch (error) { stop = true; throw error; }
+          }
+        }
+        status('reply', '正在核实本帖回复…');
+        await Promise.all(Array.from({ length: AUTO_TASK_PAGE_CONCURRENCY }, (_, index) => worker(index)));
+        if (stop || disposed) return false;
+        if (found || automaticTaskHasReply(uid, postId)) { status('reply', '本帖已有回复，已跳过'); return false; }
+        return true;
       } catch (error) {
+        stop = true;
         if (disposed) return false;
         replyRetryAt.set(key, Date.now() + 5 * 60 * 1000);
         status('reply', `${error.message || '本帖回复无法核实'}，本次跳过`); return false;
@@ -6845,14 +6862,14 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
       running = (async () => {
         const uid = currentNodeSeekUserId();
         if (!uid) { status('checkin', '登录后自动签到'); status('reply', '登录后可自动回复'); return; }
-        await checkin(uid);
-        if (!disposed && uid === currentNodeSeekUserId()) await reply(uid);
+        // 签到与回复互不依赖，同时进行，回复不再等签到请求。
+        await Promise.all([checkin(uid), reply(uid)]);
       })().catch(error => { status('reply', `自动任务未执行：${error.message || '存储不可用'}`); }).finally(() => { running = null; });
       return running;
     }
     function schedule() {
       if (disposed || scheduled) return;
-      scheduled = setTimeout(() => { scheduled = null; void run(); }, 250);
+      scheduled = setTimeout(() => { scheduled = null; void run(); }, 50);
     }
     const interval = setInterval(schedule, 60000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); }, { signal: controller.signal });
