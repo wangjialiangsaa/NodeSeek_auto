@@ -4,7 +4,7 @@
     return Array.from(document.querySelectorAll('textarea')).find((element) => !element.closest(`#${APP_ID}`) && element.closest('[class*="reply"], [class*="comment"]')) || null;
   }
 
-  const POPUP_SELECTOR = '.nsit-modal, .nsit-buy-modal, .nsit-calc-modal, .nsit-catalog-modal, .nsit-registered-machine-configs-modal, .nsit-personalization-modal, .nsit-buy-personalization-modal';
+  const POPUP_SELECTOR = '.nsit-modal, .nsit-buy-modal, .nsit-calc-modal, .nsit-catalog-modal, .nsit-registered-machine-configs-modal, .nsit-personalization-modal, .nsit-buy-personalization-modal, .nsit-sticker-panel';
 
   // 点空白处/其它控件时收起下拉与浮层。原本挂在 document 的 click 上；私信页因下面
   // 会在 #nsit-app 边界截断冒泡，弹窗内的事件到不了 document，所以抽出来给两处复用。
@@ -605,6 +605,7 @@
     if (insidePrivateMessageToolbar) isolateSiteEditorHandlers(app);
     applyEditorFeatureFlags(app);
     installEditorToolbar(app);
+    installStickers(app);
     if (isReply) { installReplyKeyboard(app); installQuickReply(app); }
   }
 

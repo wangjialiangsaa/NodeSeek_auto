@@ -152,6 +152,7 @@
       ['buyTemplate', '.nsit-buy-trigger'],
       ['calculator', '.nsit-calc-trigger'],
       ['quickReply', '.nsit-quick-reply'],
+      ['stickers', '.nsit-sticker'],
     ].forEach(([key, selector]) => {
       const button = app.querySelector(selector);
       if (button) button.style.display = featureEnabled(key) ? '' : 'none';

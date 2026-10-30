@@ -9,7 +9,7 @@ const output = path.join(root, 'NodeSeek Issue Templates.user.js');
 const minifiedOutput = path.join(root, 'NodeSeek Issue Templates.min.user.js');
 const sourceDir = path.join(root, 'src');
 const assetDir = path.join(root, 'assets', 'vendors');
-const parts = ['config.js', 'ui.js', 'logic.js', 'image-upload.js', 'toolbar.js', 'auto-tasks.js', 'author-info.js', 'threaded.js', 'home-feed.js', 'background.js', 'sticky-header.js', 'main.js'];
+const parts = ['config.js', 'ui.js', 'logic.js', 'image-upload.js', 'toolbar.js', 'stickers.js', 'auto-tasks.js', 'author-info.js', 'threaded.js', 'home-feed.js', 'background.js', 'sticky-header.js', 'main.js'];
 const start = "(function () {\n  'use strict';\n\n";
 const mimeTypes = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
 

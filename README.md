@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.86**。自动签到可在「自动化」里选择固定鸡腿或随机鸡腿（默认固定）。「⚡ 快速回复」和抽奖帖自动回复都直接调用评论接口发送，停留在当前页，不会跳到最后一页而卡住。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.87**。编辑器「🐔 工具」左边新增「😀 表情」表情包：面板打开时直接粘贴（或上传、拖入）图片，会自动传到 NodeImage 图库永久保存；表情可分组、可自定义名称，「管理」里能重命名、移动、删除；点一下表情就插入回复框。可在功能开关里关闭。
 
 如已单独创建“NodeSeek auto AI test”测试脚本，请在油猴中停用或删除；正式版不包含 AI 功能。
 
