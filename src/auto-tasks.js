@@ -71,23 +71,17 @@
     dialog.querySelector('[data-nsit-auto-close]').focus();
   }
 
-  function automaticTaskEditor() {
-    const scope = document.querySelector('#editor-body') || document.querySelector('#editor .CodeMirror');
-    if (!scope) return null;
-    const cmElement = scope.matches('.CodeMirror') ? scope : scope.querySelector('.CodeMirror');
-    const cm = cmElement?.CodeMirror;
-    const input = scope.matches('textarea') ? scope : Array.from(scope.querySelectorAll('textarea')).find(node => !node.closest(`#${APP_ID}`));
-    const area = scope.closest('.md-editor, form') || scope.parentElement;
-    const submit = Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}, [data-nsit-auto-dialog]`));
-    if (!submit || submit.disabled || (!cm && (!input || input.disabled || input.readOnly))) return null;
-    return { scope, submit, get: () => cm ? cm.getValue() : input.value, set: value => {
-      if (cm) cm.setValue(value);
-      else {
-        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-        if (setter) setter.call(input, value); else input.value = value;
-        input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    } };
+  // 直接调评论接口回帖：原生发送按钮发完会跳到最后一页，大帖重新加载楼中楼时容易卡死。
+  function nodeSeekCommentRequest(postId, content) {
+    return {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'csrf-token': luckyRandomToken(16) },
+      body: JSON.stringify({ content, mode: 'new-comment', postId: Number(postId) }),
+    };
+  }
+
+  function nodeSeekCommentError(response, payload) {
+    return response.ok && payload?.success === true ? '' : String(payload?.message || payload?.error || `HTTP ${response.status}`);
   }
 
   function automaticTaskHasReply(uid, postId) {
@@ -281,23 +275,18 @@
         if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId || !ready.autoReply || ready.replyText !== settings.replyText || !automaticTaskDraw(postId) || automaticTaskHasReply(uid, postId)) {
           status('reply', '页面或设置已变化，本次跳过'); return;
         }
-        // 直接调评论接口，不点原生发送按钮：原生发送后会跳到最后一页，
-        // 大帖重新加载楼中楼时容易卡死。回复框里的草稿也不受影响。
+        // 不点原生发送按钮，回复框里的草稿也不受影响。
         autoTaskWrite(key, { state: 'submitted', at: Date.now() });
         status('reply', '正在发送自动回复…');
         let response, payload;
         try {
-          ({ response, payload } = await request('/api/content/new-comment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'csrf-token': luckyRandomToken(16) },
-            body: JSON.stringify({ content: settings.replyText, mode: 'new-comment', postId: Number(postId) }),
-          }));
+          ({ response, payload } = await request('/api/content/new-comment', nodeSeekCommentRequest(postId, settings.replyText)));
         } catch (error) {
           if (!disposed) status('reply', '发送结果未知，请刷新确认；不会重复发送');
           return;
         }
-        if (!response.ok || payload?.success !== true) {
-          const message = String(payload?.message || payload?.error || `HTTP ${response.status}`);
+        const message = nodeSeekCommentError(response, payload);
+        if (message) {
           autoTaskWrite(key, { state: 'failed', message, at: Date.now() });
           status('reply', `自动回复未成功：${message}；不会重复发送`); return;
         }

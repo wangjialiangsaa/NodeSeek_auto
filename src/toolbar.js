@@ -153,16 +153,25 @@
       event.stopPropagation();
       const text = saved();
       if (!text) { openPanel('先填写快速回复的内容'); return; }
-      const editor = automaticTaskEditor();
-      if (!editor) { flash('回复框暂不可用'); return; }
-      const draft = String(editor.get() || '').trim();
-      if (draft && draft !== text && !confirm('回复框里已有内容，替换为快速回复并发送？')) return;
+      const postId = currentPostId();
+      if (!postId || send.disabled) return;
+      // 走评论接口发送，停留在当前页；回复框里的草稿原样保留。
       send.disabled = true;
-      editor.set(text);
-      // 等编辑器把内容同步给站点的发送逻辑，再点原生发送按钮。
-      await new Promise(resolve => setTimeout(resolve, 0));
-      if (editor.submit.isConnected && !editor.submit.disabled && editor.get() === text) { editor.submit.click(); flash('已发送'); }
-      else flash('发送按钮不可用');
-      setTimeout(() => { send.disabled = false; }, 1600);
+      const timeout = new AbortController(), timer = setTimeout(() => timeout.abort(), 20000);
+      try {
+        const response = await fetch('/api/content/new-comment', { ...nodeSeekCommentRequest(postId, text), credentials: 'same-origin', signal: timeout.signal });
+        const error = nodeSeekCommentError(response, await response.json().catch(() => null));
+        if (error) { flash(`未发送：${error}`); return; }
+        flash('已发送');
+        // 与原生「发布评论」一致：参与别人的抽奖时记一笔，并补上「我的回复」楼层标记。
+        const draw = luckyDrawForReply();
+        if (draw && !luckyIsOwnDraw()) recordParticipation(draw);
+        void syncRepliedComments().catch(() => {});
+      } catch (_) {
+        flash('结果未知，请刷新确认');
+      } finally {
+        clearTimeout(timer);
+        setTimeout(() => { send.disabled = false; }, 1600);
+      }
     });
   }

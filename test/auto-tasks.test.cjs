@@ -370,12 +370,18 @@ test('quick reply text is edited in its own panel and an empty phrase opens it',
   h.d.body.click();assert.equal(h.panel.hidden,true);
 });
 
-test('quick reply keeps a draft unless the user agrees to replace it',async t=>{
+test('quick reply posts through the API, keeps the draft and never clicks the native send button',async t=>{
   const h=quickReply(t,{draft:'我的草稿',storage:new Map([['nsit-quick-reply-v1','感谢分享']])});
-  h.w.confirm=()=>false;h.send.click();await tick();
-  assert.equal(h.posts.length,0);assert.equal(h.input.value,'我的草稿');
-  h.w.confirm=()=>true;h.send.click();for(let i=0;i<10&&!h.posts.length;i++)await tick();
-  assert.deepEqual(h.posts,['感谢分享']);
+  let clicked=false;h.d.querySelector('.submit').addEventListener('click',()=>{clicked=true;},true);
+  h.send.click();h.send.click();for(let i=0;i<10&&!h.posts.length;i++)await tick();await tick();
+  assert.deepEqual(h.commentRequests,[{content:'感谢分享',mode:'new-comment',postId:123}]);
+  assert.equal(clicked,false);assert.equal(h.input.value,'我的草稿');assert.equal(h.send.textContent,'已发送');
+});
+
+test('quick reply shows the reason when the site rejects it',async t=>{
+  const h=quickReply(t,{storage:new Map([['nsit-quick-reply-v1','感谢分享']]),commentFetch:async()=>({ok:true,status:200,json:async()=>({success:false,message:'评论太频繁'})})});
+  h.send.click();for(let i=0;i<10&&!h.commentRequests.length;i++)await tick();await tick();
+  assert.equal(h.send.textContent,'未发送：评论太频繁');
 });
 
 test('quick reply is hidden when its feature switch is off',async t=>{
