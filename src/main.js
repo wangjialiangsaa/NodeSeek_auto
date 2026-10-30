@@ -605,7 +605,7 @@
     if (insidePrivateMessageToolbar) isolateSiteEditorHandlers(app);
     applyEditorFeatureFlags(app);
     installEditorToolbar(app);
-    if (isReply) installReplyKeyboard(app);
+    if (isReply) { installReplyKeyboard(app); installQuickReply(app); }
   }
 
   const threadedReading = installThreadedReading();

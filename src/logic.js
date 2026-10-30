@@ -151,6 +151,7 @@
       ['editorTemplates', '.nsit-trigger:not(.nsit-buy-trigger):not(.nsit-calc-trigger)'],
       ['buyTemplate', '.nsit-buy-trigger'],
       ['calculator', '.nsit-calc-trigger'],
+      ['quickReply', '.nsit-quick-reply'],
     ].forEach(([key, selector]) => {
       const button = app.querySelector(selector);
       if (button) button.style.display = featureEnabled(key) ? '' : 'none';

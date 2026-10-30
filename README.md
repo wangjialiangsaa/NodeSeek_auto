@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.82**。本版加快抽奖帖自动回复：已打开的页面直接核对、不再重复抓取，其余页 3 路并发核实，签到与回复同时进行，只有一页的抽奖帖无需额外请求即可发送。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
+当前版本 **1.4.83**。本版在回帖编辑器「🐔 工具」旁新增「⚡ 快速回复」：点一下即把自定义语句填入回复框并用原生按钮发送，点 ✎ 修改语句；回复框已有草稿时先确认再替换，可在功能开关里关闭。上一版加快了抽奖帖自动回复的核实速度。安装后由本仓库 `main` 分支自动更新；[可读源码版](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.user.js)也可直接安装。首次使用需先安装 Tampermonkey，点击链接后在油猴页面确认安装，刷新 NodeSeek 生效。
 
 如已单独创建“NodeSeek auto AI test”测试脚本，请在油猴中停用或删除；正式版不包含 AI 功能。
 

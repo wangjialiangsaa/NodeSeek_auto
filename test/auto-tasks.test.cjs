@@ -46,7 +46,7 @@ function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false
   const source=['config.js','ui.js','logic.js','toolbar.js','auto-tasks.js'].map(file=>{
     const full=path.join(__dirname,'..','src',file);return fs.existsSync(full)?fs.readFileSync(full,'utf8'):'';
   }).join('\n');
-  w.eval(`(function(){${source}\nwindow.testApi={createApp,installToolbar:typeof installEditorToolbar==='function'?installEditorToolbar:null,installAuto:typeof installAutomaticTasks==='function'?installAutomaticTasks:null,openSettings:typeof openAutomaticTaskSettings==='function'?openAutomaticTaskSettings:null};})();`);
+  w.eval(`(function(){${source}\nwindow.testApi={createApp,installToolbar:typeof installEditorToolbar==='function'?installEditorToolbar:null,installQuickReply:typeof installQuickReply==='function'?installQuickReply:null,saveFlags:saveFeatureFlags,applyFlags:applyEditorFeatureFlags,installAuto:typeof installAutomaticTasks==='function'?installAutomaticTasks:null,openSettings:typeof openAutomaticTaskSettings==='function'?openAutomaticTaskSettings:null};})();`);
   const app=w.testApi.createApp({replyMode:true});app._nsitEditor=d.querySelector('#editor-body');d.querySelector('.window_header>div:last-child').prepend(app);
   function install({autoStart=false}={}){assert.equal(typeof w.testApi.installAuto,'function','automatic tasks module exists');runtime=w.testApi.installAuto({autoStart});return runtime;}
   return {w,d,app,input,posts,requests,historyRequests,threadRequests,storage,install,get runtime(){return runtime;}};
@@ -346,4 +346,39 @@ test('a slow check-in does not hold back the automatic reply',async t=>{
   const run=h.install().run();for(let i=0;i<50&&!h.posts.length;i++)await tick();
   assert.deepEqual(h.posts,['参与']);
   finish({ok:true,status:200,json:async()=>({success:true,message:'签到成功'})});await run;
+});
+
+function quickReply(t,options={}){
+  const h=setup(t,options);h.w.testApi.installToolbar(h.app);h.w.testApi.installQuickReply(h.app);
+  const group=h.app.querySelector('.nsit-quick-reply');
+  return {...h,group,send:group.querySelector('[data-nsit-quick-send]'),edit:group.querySelector('[data-nsit-quick-edit]'),panel:group.querySelector('[data-nsit-quick-panel]')};
+}
+
+test('quick reply sits next to the tools toggle and sends the saved phrase',async t=>{
+  const h=quickReply(t,{storage:new Map([['nsit-quick-reply-v1','感谢分享']])});
+  assert.equal(h.app.querySelector('.nsit-toolbox').nextElementSibling,h.group);
+  h.send.click();for(let i=0;i<10&&!h.posts.length;i++)await tick();
+  assert.deepEqual(h.posts,['感谢分享']);
+});
+
+test('quick reply text is edited in its own panel and an empty phrase opens it',async t=>{
+  const h=quickReply(t);
+  h.send.click();assert.equal(h.panel.hidden,false);assert.equal(h.posts.length,0);
+  h.panel.querySelector('textarea').value='  好帖，支持  ';h.panel.querySelector('[data-nsit-quick-save]').click();
+  assert.equal(h.panel.hidden,true);assert.equal(h.storage.get('nsit-quick-reply-v1'),'好帖，支持');
+  h.edit.click();assert.equal(h.panel.hidden,false);assert.equal(h.panel.querySelector('textarea').value,'好帖，支持');
+  h.d.body.click();assert.equal(h.panel.hidden,true);
+});
+
+test('quick reply keeps a draft unless the user agrees to replace it',async t=>{
+  const h=quickReply(t,{draft:'我的草稿',storage:new Map([['nsit-quick-reply-v1','感谢分享']])});
+  h.w.confirm=()=>false;h.send.click();await tick();
+  assert.equal(h.posts.length,0);assert.equal(h.input.value,'我的草稿');
+  h.w.confirm=()=>true;h.send.click();for(let i=0;i<10&&!h.posts.length;i++)await tick();
+  assert.deepEqual(h.posts,['感谢分享']);
+});
+
+test('quick reply is hidden when its feature switch is off',async t=>{
+  const h=quickReply(t);assert.equal(h.group.style.display,'');
+  h.w.testApi.saveFlags({quickReply:false});h.w.testApi.applyFlags(h.app);assert.equal(h.group.style.display,'none');
 });

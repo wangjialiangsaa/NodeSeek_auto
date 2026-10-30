@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.82
+// @version      1.4.83
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.82';
+  const VERSION = '1.4.83';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -40,6 +40,7 @@ const APP_ID = 'nsit-app';
     ['editorTemplates', '出鸡模板', '发帖 / 回帖编辑器里的「出🐔模板」入口'],
     ['buyTemplate', '收鸡模板', '编辑器里的「收🐔模板」入口'],
     ['calculator', '剩余价值计算', '回帖 / 私信编辑器里的计算器入口'],
+    ['quickReply', '快速回复', '回帖编辑器「🐔 工具」旁的一键发送自定义语句按钮'],
     ['lucky', '抽奖配置', '编辑器里的「抽奖配置」入口'],
     ['luckyNotify', '抽奖与中奖通知', '个人统计里的「抽奖 / 中奖」入口，以及帖子的开奖公告按钮'],
     ['tradeStatus', '交易状态', '帖子页 #0 楼旁的「已出 / 已收」按钮'],
@@ -1170,6 +1171,7 @@ function formValues(app) {
       ['editorTemplates', '.nsit-trigger:not(.nsit-buy-trigger):not(.nsit-calc-trigger)'],
       ['buyTemplate', '.nsit-buy-trigger'],
       ['calculator', '.nsit-calc-trigger'],
+      ['quickReply', '.nsit-quick-reply'],
     ].forEach(([key, selector]) => {
       const button = app.querySelector(selector);
       if (button) button.style.display = featureEnabled(key) ? '' : 'none';
@@ -6558,6 +6560,74 @@ function installReplyKeyboard(app) {
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  const QUICK_REPLY_KEY = 'nsit-quick-reply-v1';
+
+  // 「快速回复」：一键把自定义语句填进原生回复框并用原生按钮发送；✎ 修改语句。
+  function installQuickReply(app) {
+    const toolbox = app.querySelector('.nsit-toolbox');
+    if (!toolbox || app.querySelector('.nsit-quick-reply') || !/^\/post-\d+-\d+\/?$/.test(location.pathname)) return;
+    const group = document.createElement('span');
+    group.className = 'nsit-quick-reply';
+    group.innerHTML = '<button type="button" class="nsit-quick-send" data-nsit-quick-send>⚡ 快速回复</button><button type="button" class="nsit-quick-edit" data-nsit-quick-edit aria-label="编辑快速回复内容" title="编辑快速回复内容" aria-expanded="false">✎</button><span class="nsit-quick-panel" data-nsit-quick-panel hidden><textarea maxlength="500" rows="3" placeholder="填写快速回复的内容"></textarea><span class="nsit-quick-actions"><small data-nsit-quick-message role="status"></small><button type="button" data-nsit-quick-cancel>取消</button><button type="button" data-nsit-quick-save>保存</button></span></span>';
+    group.style.display = featureEnabled('quickReply') ? '' : 'none';
+    toolbox.after(group);
+    injectStyles(`#${APP_ID} .nsit-quick-reply{position:relative;display:inline-flex;align-items:stretch;flex:none;vertical-align:middle;height:26px;margin:0 7px 0 0}#${APP_ID} .nsit-quick-reply>button{box-sizing:border-box;margin:0;border:1px solid var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink);font:600 13px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:nowrap;cursor:pointer}#${APP_ID} .nsit-quick-send{padding:3px 8px;border-radius:5px 0 0 5px}#${APP_ID} .nsit-quick-edit{padding:3px 7px;border-left:0!important;border-radius:0 5px 5px 0}#${APP_ID} .nsit-quick-reply>button:hover{background:var(--nsit-accent);color:#fff}#${APP_ID} .nsit-quick-reply>button:disabled{opacity:.6;cursor:default}#${APP_ID} .nsit-quick-panel{position:absolute;z-index:1000;top:calc(100% + 6px);left:0;display:grid;gap:6px;box-sizing:border-box;width:min(300px,calc(100vw - 16px));padding:8px;border:1px solid var(--nsit-line-strong);border-radius:7px;background:var(--nsit-surface);box-shadow:0 8px 18px var(--nsit-shadow-soft)}#${APP_ID} .nsit-quick-panel[hidden]{display:none}#${APP_ID} .nsit-quick-panel textarea{box-sizing:border-box;width:100%;min-height:64px;padding:6px;border:1px solid var(--nsit-line-strong);border-radius:5px;background:var(--nsit-sunken);color:var(--nsit-ink);font:13px/1.5 inherit;resize:vertical}#${APP_ID} .nsit-quick-actions{display:flex;align-items:center;gap:6px}#${APP_ID} .nsit-quick-actions small{flex:1;color:var(--nsit-muted);font-size:12px}#${APP_ID} .nsit-quick-actions button{padding:2px 10px;border:1px solid var(--nsit-line-strong);border-radius:5px;background:var(--nsit-sunken);color:var(--nsit-ink);font:12px/1.5 inherit;cursor:pointer}#${APP_ID} .nsit-quick-actions [data-nsit-quick-save]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}@media(pointer:coarse){#${APP_ID} .nsit-quick-edit{position:relative}#${APP_ID} .nsit-quick-edit::after{content:'';position:absolute;inset:-8px -8px -8px 0}}`);
+    const send = group.querySelector('[data-nsit-quick-send]'), edit = group.querySelector('[data-nsit-quick-edit]');
+    const panel = group.querySelector('[data-nsit-quick-panel]'), input = panel.querySelector('textarea'), message = panel.querySelector('[data-nsit-quick-message]');
+    const saved = () => String(autoTaskRead(QUICK_REPLY_KEY, '') || '').trim();
+    function flash(text) {
+      send.title = text; send.textContent = text;
+      setTimeout(() => { send.textContent = '⚡ 快速回复'; send.title = saved() ? `发送：${saved()}` : '先设置快速回复内容'; }, 1600);
+    }
+    function openPanel(hint = '') {
+      input.value = saved(); message.textContent = hint; panel.hidden = false;
+      edit.setAttribute('aria-expanded', 'true');
+      // 底部固定回复栏贴着屏幕底边：放不下时向上展开，并保持在屏幕左右边界内。
+      panel.style.left = panel.style.top = panel.style.bottom = '';
+      const anchor = group.getBoundingClientRect(), box = panel.getBoundingClientRect();
+      const width = document.documentElement.clientWidth || innerWidth, height = window.visualViewport?.height || innerHeight;
+      if (anchor.left + box.width > width - 8) panel.style.left = `${Math.min(0, width - 8 - box.width - anchor.left)}px`;
+      if (box.bottom > height - 8 && anchor.top - box.height - 6 >= 8) { panel.style.top = 'auto'; panel.style.bottom = 'calc(100% + 6px)'; }
+      input.focus();
+    }
+    function closePanel() { panel.hidden = true; edit.setAttribute('aria-expanded', 'false'); }
+    send.title = saved() ? `发送：${saved()}` : '先设置快速回复内容';
+    edit.addEventListener('click', event => { event.stopPropagation(); if (panel.hidden) openPanel(); else closePanel(); });
+    panel.addEventListener('click', event => event.stopPropagation());
+    panel.querySelector('[data-nsit-quick-cancel]').addEventListener('click', closePanel);
+    panel.querySelector('[data-nsit-quick-save]').addEventListener('click', () => {
+      try {
+        autoTaskWrite(QUICK_REPLY_KEY, input.value.trim());
+        send.title = saved() ? `发送：${saved()}` : '先设置快速回复内容'; closePanel();
+      } catch (_) { message.textContent = '保存失败，请检查浏览器存储'; }
+    });
+    input.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Escape') { closePanel(); edit.focus(); }
+    });
+    const outside = new AbortController();
+    document.addEventListener('click', event => {
+      if (!group.isConnected) { outside.abort(); return; }
+      if (!group.contains(event.target)) closePanel();
+    }, { signal: outside.signal });
+    send.addEventListener('click', async event => {
+      event.stopPropagation();
+      const text = saved();
+      if (!text) { openPanel('先填写快速回复的内容'); return; }
+      const editor = automaticTaskEditor();
+      if (!editor) { flash('回复框暂不可用'); return; }
+      const draft = String(editor.get() || '').trim();
+      if (draft && draft !== text && !confirm('回复框里已有内容，替换为快速回复并发送？')) return;
+      send.disabled = true;
+      editor.set(text);
+      // 等编辑器把内容同步给站点的发送逻辑，再点原生发送按钮。
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (editor.submit.isConnected && !editor.submit.disabled && editor.get() === text) { editor.submit.click(); flash('已发送'); }
+      else flash('发送按钮不可用');
+      setTimeout(() => { send.disabled = false; }, 1600);
+    });
+  }
+
 const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
   const AUTO_TASK_RUNTIME_KEY = '__nsitAutomaticTasks__';
   const AUTO_TASK_PAGE_CONCURRENCY = 3;
@@ -9346,7 +9416,7 @@ function replyEditor() {
     if (insidePrivateMessageToolbar) isolateSiteEditorHandlers(app);
     applyEditorFeatureFlags(app);
     installEditorToolbar(app);
-    if (isReply) installReplyKeyboard(app);
+    if (isReply) { installReplyKeyboard(app); installQuickReply(app); }
   }
 
   const threadedReading = installThreadedReading();
