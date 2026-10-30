@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.83
+// @version      1.4.84
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.83';
+  const VERSION = '1.4.84';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6672,7 +6672,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     if (!dialog) {
       injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{box-sizing:border-box;width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
-      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；有草稿时保留草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
+      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查，默认领取固定奖励。</p><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；直接通过接口发送，停留在当前页，不动回复框里的草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
       const close = () => { dialog.hidden = true; };
       dialog.querySelector('[data-nsit-auto-close]').addEventListener('click', close);
@@ -6897,33 +6897,45 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
           if (record && record.state !== 'done') autoTaskWrite(key, { ...record, state: 'done' });
           status('reply', '本帖已回复，已跳过'); return;
         }
-        if (record) { status('reply', record.state === 'done' ? '本帖已自动回复' : '本帖已尝试提交，请检查网页确认结果；不会重复发送'); return; }
+        if (record) {
+          status('reply', record.state === 'done' ? '本帖已自动回复' : record.state === 'failed' ? `自动回复未成功：${record.message || '接口拒绝'}；不会重复发送` : '本帖已尝试提交，请刷新确认结果；不会重复发送');
+          return;
+        }
         // 不在第一页时先补拉第一页的开奖参数
         if (!luckyFirstFloor()) await resolveCurrentDraw();
         const draw = automaticTaskDraw(postId);
         if (!draw) { status('reply', '本页未检测到当前帖的有效抽奖链接'); return; }
         if (luckyIsOwnDraw()) { status('reply', '自己发起的抽奖，已跳过'); return; }
-        const editor = automaticTaskEditor();
-        if (!editor) { status('reply', '原生回复框暂不可用'); return; }
-        if (editor.get()) { status('reply', '检测到草稿，保留草稿并跳过自动回复'); return; }
         if (!await verifyThreadReplies(uid, postId)) return;
         const ready = automaticTaskSettings();
-        if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId || !editor.scope.isConnected || !editor.submit.isConnected || editor.get() || !ready.autoReply || ready.replyText !== settings.replyText || !automaticTaskDraw(postId) || editor.submit.disabled || automaticTaskHasReply(uid, postId)) {
-          status('reply', '页面、设置或草稿已变化，本次跳过'); return;
+        if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId || !ready.autoReply || ready.replyText !== settings.replyText || !automaticTaskDraw(postId) || automaticTaskHasReply(uid, postId)) {
+          status('reply', '页面或设置已变化，本次跳过'); return;
         }
-        const phrase = settings.replyText;
-        autoTaskWrite(key, { state: 'prepared', at: Date.now() });
-        editor.set(phrase);
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const latestSettings = automaticTaskSettings();
-        if (disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId || !editor.scope.isConnected || !editor.submit.isConnected || editor.get() !== phrase || !latestSettings.autoReply || latestSettings.replyText !== phrase || !automaticTaskDraw(postId) || editor.submit.disabled) {
-          if (editor.scope.isConnected && editor.get() === phrase) editor.set('');
-          autoTaskWrite(key, null); status('reply', '自动回复已取消，草稿已保留'); return;
-        }
+        // 直接调评论接口，不点原生发送按钮：原生发送后会跳到最后一页，
+        // 大帖重新加载楼中楼时容易卡死。回复框里的草稿也不受影响。
         autoTaskWrite(key, { state: 'submitted', at: Date.now() });
-        editor.submit.click();
-        if (automaticTaskHasReply(uid, postId)) { autoTaskWrite(key, { state: 'done', at: Date.now() }); status('reply', '本帖自动回复成功'); }
-        else status('reply', '已通过原生按钮提交，请检查网页确认结果；不会重复发送');
+        status('reply', '正在发送自动回复…');
+        let response, payload;
+        try {
+          ({ response, payload } = await request('/api/content/new-comment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'csrf-token': luckyRandomToken(16) },
+            body: JSON.stringify({ content: settings.replyText, mode: 'new-comment', postId: Number(postId) }),
+          }));
+        } catch (error) {
+          if (!disposed) status('reply', '发送结果未知，请刷新确认；不会重复发送');
+          return;
+        }
+        if (!response.ok || payload?.success !== true) {
+          const message = String(payload?.message || payload?.error || `HTTP ${response.status}`);
+          autoTaskWrite(key, { state: 'failed', message, at: Date.now() });
+          status('reply', `自动回复未成功：${message}；不会重复发送`); return;
+        }
+        autoTaskWrite(key, { state: 'done', at: Date.now() });
+        recordParticipation(draw);
+        status('reply', '本帖自动回复成功');
+        // 补上「我的回复」楼层标记；失败不影响结果。
+        void syncRepliedComments().catch(() => {});
       });
     }
     function run() {

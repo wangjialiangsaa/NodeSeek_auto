@@ -13,11 +13,11 @@ function threadPage(postId=123,{page=1,next=false,author=8}={}) {
 // The open page is checked in place; tests that exercise fetching open the post on a page beyond the thread.
 const away="https://www.nodeseek.com/post-123-99";
 
-function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,threadFetch,confirmReply=true}={}) {
+function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false},url='https://www.nodeseek.com/post-123-1',uid=7,draft='',link,fetch,historyFetch,threadFetch,commentFetch,confirmReply=true}={}) {
   const postId=Number(new URL(url).pathname.match(/post-(\d+)/)?.[1]||123);
   const href=link??`https://www.nodeseek.com/lucky?post=123&time=${future}&count=1&start=1`;
   const dom=new JSDOM(`<html><head></head><body><article class="content-item" id="0"><a class="author-name" href="/space/8">OP</a><div class="post-content"><a href="${href}">抽奖链接</a></div></article><div id="editor"><div class="md-editor"><div id="editor-body"><div class="window_header"><div>内容 预览 对照</div><div><a href="https://www.runoob.com/markdown/md-tutorial.html">支持 Markdown</a></div></div><textarea aria-label="发言栏"></textarea></div><div class="topic-select"><button class="submit" type="button">发布评论</button></div></div></div></body></html>`,{url,runScripts:'outside-only',pretendToBeVisual:true});
-  const w=dom.window,d=w.document,requests=[],historyRequests=[],threadRequests=[],posts=[];
+  const w=dom.window,d=w.document,requests=[],historyRequests=[],threadRequests=[],commentRequests=[],posts=[];
   const observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver {constructor(fn){super(fn);observers.push(this);}};
   let runtime;
@@ -35,6 +35,7 @@ function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false
   w.__config__={user:uid?{member_id:uid}:null,postData:{postId,op:{uid:8},comments:[{floorIndex:0,poster:{uid:8},markdown:`[抽奖](${href})`}]}};
   w.fetch=async(...args)=>{
     if(String(args[0]).startsWith('/api/content/list-comments')){historyRequests.push(args);return historyFetch?historyFetch(...args):{ok:true,status:200,json:async()=>({success:true,comments:[]})};}
+    if(String(args[0])==='/api/content/new-comment'){const body=JSON.parse(args[1].body);commentRequests.push(body);if(commentFetch)return commentFetch(body);posts.push(body.content);if(confirmReply)w.__config__.postData.comments.push({floorIndex:1,poster:{uid,isMe:true},markdown:body.content});return {ok:true,status:200,json:async()=>({success:true,message:'评论成功'})};}
     if(String(args[0]).startsWith('/post-')){threadRequests.push(args);return threadFetch?threadFetch(...args):{ok:true,status:200,text:async()=>threadPage(postId)};}
     requests.push(args);return fetch?fetch(...args):{ok:true,status:200,json:async()=>({success:true,message:'签到成功'})};
   };
@@ -49,7 +50,7 @@ function setup(t,{storage=new Map(),locks=new Set(),settings={dailyCheckin:false
   w.eval(`(function(){${source}\nwindow.testApi={createApp,installToolbar:typeof installEditorToolbar==='function'?installEditorToolbar:null,installQuickReply:typeof installQuickReply==='function'?installQuickReply:null,saveFlags:saveFeatureFlags,applyFlags:applyEditorFeatureFlags,installAuto:typeof installAutomaticTasks==='function'?installAutomaticTasks:null,openSettings:typeof openAutomaticTaskSettings==='function'?openAutomaticTaskSettings:null};})();`);
   const app=w.testApi.createApp({replyMode:true});app._nsitEditor=d.querySelector('#editor-body');d.querySelector('.window_header>div:last-child').prepend(app);
   function install({autoStart=false}={}){assert.equal(typeof w.testApi.installAuto,'function','automatic tasks module exists');runtime=w.testApi.installAuto({autoStart});return runtime;}
-  return {w,d,app,input,posts,requests,historyRequests,threadRequests,storage,install,get runtime(){return runtime;}};
+  return {w,d,app,input,posts,requests,historyRequests,threadRequests,commentRequests,storage,install,get runtime(){return runtime;}};
 }
 
 test('compact toolbar toggle preserves button labels and dismisses on Escape/outside click',async t=>{
@@ -133,13 +134,12 @@ test('opening a thread with the supplied mode=view lottery replies despite a lon
   h.w.Date.now=()=>Date.UTC(2026,9,22,13);
   const runtime=h.install();await runtime.run();await runtime.run();
   assert.deepEqual(h.posts,['接好运！'],JSON.stringify(runtime.status));
-  assert.equal(h.historyRequests.length,0,'unrelated personal history is not needed');
+  assert.equal(h.commentRequests.length,1);assert.equal(h.threadRequests.length,0,'unrelated personal history is not needed');
 });
 
 test('entering the lottery thread triggers the saved reply without manually running the task',{timeout:3000},async t=>{
   const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与一下！'}});
-  const submitted=new Promise(resolve=>h.d.querySelector('.submit').addEventListener('click',resolve,{once:true}));
-  h.install({autoStart:true});await submitted;
+  h.install({autoStart:true});while(!h.posts.length)await tick();
   assert.deepEqual(h.posts,['参与一下！']);
 });
 
@@ -148,7 +148,6 @@ for(const [name,options] of [
   ['external lottery URL',{link:`https://example.com/lucky?post=123&time=${future}`}],
   ['other thread lottery',{link:`https://www.nodeseek.com/lucky?post=999&time=${future}`}],
   ['expired lottery',{link:'https://www.nodeseek.com/lucky?post=123&time=1600000000000'}],
-  ['occupied draft',{draft:'我正在写的回复'}],
   ['logged out',{uid:0}],
 ])test(`auto reply skips ${name}`,async t=>{
   const h=setup(t,{...options,settings:{dailyCheckin:false,autoReply:true,replyText:'感谢分享！'}});const before=h.input.value;
@@ -216,12 +215,15 @@ test('a complete first page with no comments can receive the first reply',async 
   await h.install().run();assert.deepEqual(h.posts,["参与"],JSON.stringify([h.runtime.status,h.threadRequests.map(r=>r[0])]));
 });
 
-test('typing a draft while thread verification loads preserves it and cancels automatic posting',async t=>{
-  let resolvePage;const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:()=>new Promise(resolve=>{resolvePage=resolve;})});
+test('automatic reply posts through the API and never touches the draft or the native send button',async t=>{
+  let resolvePage;const h=setup(t,{url:away,draft:'我正在写的回复',settings:{dailyCheckin:false,autoReply:true,replyText:'谢谢'},threadFetch:()=>new Promise(resolve=>{resolvePage=resolve;})});
+  let clicked=false;h.d.querySelector('.submit').addEventListener('click',()=>{clicked=true;},true);
   const run=h.install().run();await tick();h.input.value='正在输入的新草稿';
   assert.equal(h.threadRequests.length,1);
   resolvePage({ok:true,status:200,text:async()=>threadPage()});await run;
-  assert.equal(h.posts.length,0);assert.equal(h.input.value,'正在输入的新草稿');
+  assert.deepEqual(h.commentRequests,[{content:'谢谢',mode:'new-comment',postId:123}]);
+  assert.equal(clicked,false);assert.equal(h.input.value,'正在输入的新草稿');
+  assert.equal(h.storage.get('nsit-auto-reply-v1-7-123').state,'done');
 });
 
 test('uncertain submissions are never automatically repeated after reload',async t=>{
@@ -265,15 +267,13 @@ test('not-yet-signed server messages remain retryable failures',async t=>{
 });
 
 test('changing the configured phrase before submission cancels the pending reply',async t=>{
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'旧语句'}});
-  h.input.addEventListener('input',()=>h.storage.set(settingsKey,{dailyCheckin:false,autoReply:true,replyText:'新语句'}),{once:true});
-  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'旧语句'},threadFetch:async()=>{h.storage.set(settingsKey,{dailyCheckin:false,autoReply:true,replyText:'新语句'});return {ok:true,status:200,text:async()=>threadPage()};}});
+  await h.install().run();assert.equal(h.posts.length,0);
 });
 
 test('a draw that expires while preparing is not submitted',async t=>{
-  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'祝好运'}});
-  h.input.addEventListener('input',()=>{h.w.Date.now=()=>future+1;},{once:true});
-  await h.install().run();assert.equal(h.posts.length,0);assert.equal(h.input.value,'');
+  const h=setup(t,{url:away,settings:{dailyCheckin:false,autoReply:true,replyText:'祝好运'},threadFetch:async()=>{h.w.Date.now=()=>future+1;return {ok:true,status:200,text:async()=>threadPage()};}});
+  await h.install().run();assert.equal(h.posts.length,0);
 });
 
 test('stalled attendance times out and does not prevent the reply task',async t=>{
@@ -381,4 +381,17 @@ test('quick reply keeps a draft unless the user agrees to replace it',async t=>{
 test('quick reply is hidden when its feature switch is off',async t=>{
   const h=quickReply(t);assert.equal(h.group.style.display,'');
   h.w.testApi.saveFlags({quickReply:false});h.w.testApi.applyFlags(h.app);assert.equal(h.group.style.display,'none');
+});
+
+test('a rejected automatic reply is reported and not retried',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'},commentFetch:async()=>({ok:true,status:200,json:async()=>({success:false,message:'评论太频繁'})})});
+  const runtime=h.install();await runtime.run();await runtime.run();
+  assert.equal(h.commentRequests.length,1);assert.match(runtime.status.reply,/评论太频繁/);
+});
+
+test('an automatic reply records lottery participation',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:false,autoReply:true,replyText:'参与'}});
+  await h.install().run();
+  const stored=JSON.stringify([...h.storage.entries()])+JSON.stringify({...h.w.localStorage});
+  assert.match(stored,/participated\\*"\s*:\s*true/,'participation stored');
 });
