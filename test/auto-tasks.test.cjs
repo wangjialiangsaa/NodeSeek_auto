@@ -96,7 +96,7 @@ test('thread default starts collapsed for existing settings and saves without ch
   const save=()=>dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{bubbles:true,cancelable:true}));
   save();assert.deepEqual(changes,[],'saving an unchanged default preserves manual branch state');
   collapsed.checked=false;save();
-  assert.deepEqual(h.storage.get(settingsKey),{...settings,threadDefaultCollapsed:false});
+  assert.deepEqual(h.storage.get(settingsKey),{...settings,checkinRandom:false,threadDefaultCollapsed:false});
   assert.deepEqual(changes,[{collapsed:false,saved:false}],'current page is notified after successful storage');
   save();assert.equal(changes.length,1,'repeated saves do not reset manually adjusted branches');
   h.w.testApi.openSettings();assert.equal(collapsed.checked,false,'reopening settings retains the choice');
@@ -400,4 +400,15 @@ test('an automatic reply records lottery participation',async t=>{
   await h.install().run();
   const stored=JSON.stringify([...h.storage.entries()])+JSON.stringify({...h.w.localStorage});
   assert.match(stored,/participated\\*"\s*:\s*true/,'participation stored');
+});
+
+test('check-in reward can be fixed or random and defaults to fixed',async t=>{
+  const h=setup(t,{settings:{dailyCheckin:true}});h.w.testApi.openSettings();
+  const dialog=h.d.querySelector('[data-nsit-auto-dialog]');
+  assert.equal(dialog.querySelector('[name="checkinMode"]:checked').value,'fixed');
+  dialog.querySelector('[name="checkinMode"][value="random"]').checked=true;
+  dialog.querySelector('form').dispatchEvent(new h.w.Event('submit',{cancelable:true}));
+  assert.equal(h.storage.get(settingsKey).checkinRandom,true);
+  await h.install().run();assert.equal(h.requests[0][0],'/api/attendance?random=true');
+  h.w.testApi.openSettings();assert.equal(dialog.querySelector('[name="checkinMode"]:checked').value,'random');
 });
