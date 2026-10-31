@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.88';
+  const VERSION = '1.4.89';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -28,6 +28,7 @@
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));
   const REPLIED_POSTS_STORAGE_KEY = 'nsit-replied-posts-v1';
   const POST_FILTER_RULES_STORAGE_KEY = 'nsit-post-filter-rules-v1';
+  const POST_FILTER_HIGHLIGHT_COLORS = [['#fff9c4', '柠檬黄'], ['#ffe0b2', '橙'], ['#ffcdd2', '红'], ['#f8bbd0', '粉'], ['#e1bee7', '紫'], ['#bbdefb', '蓝'], ['#b2ebf2', '青'], ['#c8e6c9', '绿'], ['#cfd8dc', '灰']];
   const POST_FILTER_RUNTIME_KEY = '__nodeSeekIssueTemplatesPostFilters__';
   const COMMENT_LISTENER_KEY = '__nodeSeekIssueTemplatesCommentListener__';
   const TRADE_STATUS_RUNTIME_KEY = '__nodeSeekIssueTemplatesTradeStatus__';

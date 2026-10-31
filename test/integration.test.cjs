@@ -198,3 +198,35 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     assert.equal(cm.getValue(),'existing draft');
   });
 }
+
+for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.min.user.js']) {
+  test(`${file}: highlight rules take preset, custom and hex colors and can be recolored from the list`,async t=>{
+    const {w,d}=await setup(t,file);
+    const list=d.createElement('ul');d.querySelector('main').append(list);
+    list.insertAdjacentHTML('beforeend','<li class="post-list-item"><div class="post-list-content"><div class="post-title"><a href="/post-77-1">出 香港 小鸡</a></div></div></li>');
+    d.querySelector('[data-nsit-post-filter-trigger]').click();
+    const panel=d.querySelector('[data-nsit-post-filter-panel]');
+    panel.querySelector('[data-nsit-filter-tab="highlight"]').click();
+    panel.querySelector('[data-nsit-filter-action="new"]').click();
+    const form=()=>panel.querySelector('[data-nsit-post-filter-form]');
+    assert.equal(form().querySelector('.nsit-filter-color-field').classList.contains('is-hidden'),false);
+    assert.equal(form().querySelectorAll('[data-nsit-filter-swatch]').length,9);
+    form().querySelector('[data-nsit-filter-swatch="#bbdefb"]').click();
+    assert.equal(form().querySelector('[name="color"]').value,'#bbdefb');
+    assert.equal(form().querySelector('[data-nsit-filter-hex]').value,'#bbdefb');
+    assert.equal(form().querySelector('[data-nsit-filter-swatch="#bbdefb"]').getAttribute('aria-pressed'),'true');
+    const hex=form().querySelector('[data-nsit-filter-hex]');hex.value='FF8800';hex.dispatchEvent(new w.Event('input',{bubbles:true}));
+    assert.equal(form().querySelector('[name="color"]').value,'#ff8800');
+    assert.equal(form().querySelector('[data-nsit-filter-swatch="#bbdefb"]').getAttribute('aria-pressed'),'false');
+    form().querySelector('[name="keywords"]').value='香港';
+    form().dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+    const post=list.firstElementChild;
+    assert.equal(JSON.parse(w.localStorage.getItem('nsit-post-filter-rules-v1'))[0].color,'#ff8800');
+    assert.equal(post.classList.contains('nsit-filter-highlighted'),true);
+    assert.equal(post.style.getPropertyValue('--nsit-filter-highlight'),'#ff8800');
+    const recolor=panel.querySelector('[data-nsit-filter-recolor]');assert.ok(recolor,'list dot is a color picker');
+    recolor.value='#c8e6c9';recolor.dispatchEvent(new w.Event('input',{bubbles:true}));recolor.dispatchEvent(new w.Event('change',{bubbles:true}));
+    assert.equal(JSON.parse(w.localStorage.getItem('nsit-post-filter-rules-v1'))[0].color,'#c8e6c9');
+    assert.equal(post.style.getPropertyValue('--nsit-filter-highlight'),'#c8e6c9');
+  });
+}

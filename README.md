@@ -6,7 +6,7 @@
 
 **[一键安装到 Tampermonkey（油猴）](https://raw.githubusercontent.com/wangjialiangsaa/NodeSeek_auto/main/NodeSeek%20Issue%20Templates.min.user.js)**
 
-当前版本 **1.4.88**。自动签到在打开 NodeSeek 任意页面（含主页）时直接完成，无需点击；签到成功后页面顶部居中弹出提示「签到成功，获得 N 个鸡腿（现有 M 个）」，5 秒后自动消失，不挡点击。
+当前版本 **1.4.89**。「过滤 → 🎨 高亮」可自定义颜色：9 种预设色块一键选择，也能用取色器或直接输入色值（如 #ff8800）；规则列表左侧的色点点一下即可直接换色，帖子立即更新。
 
 如已单独创建“NodeSeek auto AI test”测试脚本，请在油猴中停用或删除；正式版不包含 AI 功能。
 
