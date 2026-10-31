@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.87
+// @version      1.4.88
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.87';
+  const VERSION = '1.4.88';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6902,7 +6902,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     if (!dialog) {
       injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{box-sizing:border-box;width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-choice{display:flex;flex-wrap:wrap;gap:4px 18px;margin:4px 0 0 22px}.nsit-auto-dialog .nsit-auto-choice label{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:13px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
-      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 时自动签到；跨天后继续检查。</p><div class="nsit-auto-choice" role="radiogroup" aria-label="签到奖励"><label><input type="radio" name="checkinMode" value="fixed"> 固定鸡腿</label><label><input type="radio" name="checkinMode" value="random"> 随机鸡腿（试试手气）</label></div><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；直接通过接口发送，停留在当前页，不动回复框里的草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
+      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 任意页面（含主页）即自动签到，无需点击；成功后页面顶部提示获得的鸡腿数，5 秒后自动消失。跨天后继续检查。</p><div class="nsit-auto-choice" role="radiogroup" aria-label="签到奖励"><label><input type="radio" name="checkinMode" value="fixed"> 固定鸡腿</label><label><input type="radio" name="checkinMode" value="random"> 随机鸡腿（试试手气）</label></div><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；直接通过接口发送，停留在当前页，不动回复框里的草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
       const close = () => { dialog.hidden = true; };
       dialog.querySelector('[data-nsit-auto-close]').addEventListener('click', close);
@@ -6991,6 +6991,35 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
     // 不在第一页时 0 楼不在页面上：用 resolveCurrentDraw 补拉第一页得到的开奖参数。
     const cached = luckyDrawCache.postId === postId ? luckyDrawCache.draw : null;
     return cached && cached.postId === postId && cached.time > Date.now() ? cached : null;
+  }
+
+  // 签到成功后在页面顶部居中提示收益，几秒后自动消失，不拦点击。
+  function checkinToastText(payload) {
+    const number = value => (value === null || value === undefined || value === '' ? NaN : Number(value));
+    const message = String(payload?.message || '');
+    let gain = number(payload?.gain);
+    if (!Number.isFinite(gain)) gain = number(message.match(/(\d+)\s*个?\s*鸡腿/)?.[1]);
+    const current = number(payload?.current);
+    const head = Number.isFinite(gain) ? `🍗 签到成功，获得 ${gain} 个鸡腿` : `🍗 ${message || '签到成功'}`;
+    return Number.isFinite(current) ? `${head}（现有 ${current} 个）` : head;
+  }
+
+  function showCheckinToast(payload) {
+    if (!document.body) return;
+    document.querySelector('.nsit-checkin-toast')?.remove();
+    if (!document.querySelector('style[data-nsit-checkin-toast]')) {
+      const style = document.createElement('style');
+      style.dataset.nsitCheckinToast = '';
+      style.textContent = '.nsit-checkin-toast{position:fixed;z-index:2147483000;top:14px;left:50%;max-width:calc(100vw - 32px);box-sizing:border-box;padding:9px 18px;border:1px solid rgba(214,139,22,.45);border-radius:999px;background:rgba(255,248,232,.97);color:#7a4a00;box-shadow:0 6px 20px rgba(0,0,0,.14);font:600 14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;pointer-events:none;transform:translate(-50%,-8px);opacity:0;transition:opacity .25s,transform .25s}.nsit-checkin-toast.is-shown{opacity:1;transform:translate(-50%,0)}@media(prefers-color-scheme:dark){.nsit-checkin-toast{border-color:rgba(255,190,90,.4);background:rgba(48,36,16,.96);color:#ffd48a}}@media(prefers-reduced-motion:reduce){.nsit-checkin-toast{transition:none}}';
+      document.head.append(style);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'nsit-checkin-toast';
+    toast.setAttribute('role', 'status');
+    toast.textContent = checkinToastText(payload);
+    document.body.append(toast);
+    setTimeout(() => toast.classList.add('is-shown'), 30);
+    setTimeout(() => { toast.classList.remove('is-shown'); setTimeout(() => toast.remove(), 300); }, 5000);
   }
 
   function installAutomaticTasks({ autoStart = true } = {}) {
@@ -7104,6 +7133,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
           if (!response.ok || !(payload?.success === true || /已(?:经)?签(?:到|过)|already\s+(?:signed|checked)/i.test(message))) throw new Error(message || `签到失败（HTTP ${response.status}）`);
           const text = message || '今日签到成功';
           autoTaskWrite(key, { day, done: true, message: text }); status('checkin', text);
+          if (payload?.success === true) showCheckinToast(payload);
         } catch (error) {
           if (disposed) return;
           const text = `签到未完成：${error.message || '网络错误'}，稍后重试`;

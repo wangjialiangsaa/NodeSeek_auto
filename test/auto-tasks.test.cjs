@@ -412,3 +412,26 @@ test('check-in reward can be fixed or random and defaults to fixed',async t=>{
   await h.install().run();assert.equal(h.requests[0][0],'/api/attendance?random=true');
   h.w.testApi.openSettings();assert.equal(dialog.querySelector('[name="checkinMode"]:checked').value,'random');
 });
+
+test('successful checkin shows a self-dismissing top toast with the chicken-leg gain',async t=>{
+  const h=setup(t,{url:'https://www.nodeseek.com/',settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success:true,message:'签到收益5个鸡腿',gain:5,current:128})})});
+  await h.install().run();
+  const toast=h.d.querySelector('.nsit-checkin-toast');
+  assert.ok(toast,'toast shown without any click');
+  assert.equal(toast.textContent,'🍗 签到成功，获得 5 个鸡腿（现有 128 个）');
+  assert.equal(h.w.getComputedStyle(toast).pointerEvents,'none');
+  await new Promise(resolve=>setTimeout(resolve,5400));
+  assert.equal(h.d.querySelector('.nsit-checkin-toast'),null,'toast removed on its own');
+});
+
+test('checkin toast falls back to the message count and is skipped when already signed',async t=>{
+  const a=setup(t,{settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success:true,message:'签到收益 3 个鸡腿'})})});
+  await a.install().run();
+  assert.equal(a.d.querySelector('.nsit-checkin-toast').textContent,'🍗 签到成功，获得 3 个鸡腿');
+  const b=setup(t,{settings:{dailyCheckin:true},fetch:async()=>({ok:true,status:200,json:async()=>({success:false,message:'今天已经签到过了'})})});
+  await b.install().run();
+  assert.equal(b.d.querySelector('.nsit-checkin-toast'),null);
+  const c=setup(t,{settings:{dailyCheckin:true}});
+  const runtime=c.install();await runtime.run();c.d.querySelector('.nsit-checkin-toast').remove();await runtime.run();
+  assert.equal(c.d.querySelector('.nsit-checkin-toast'),null,'only once per day');
+});
