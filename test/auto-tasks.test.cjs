@@ -435,3 +435,26 @@ test('checkin toast falls back to the message count and is skipped when already 
   const runtime=c.install();await runtime.run();c.d.querySelector('.nsit-checkin-toast').remove();await runtime.run();
   assert.equal(c.d.querySelector('.nsit-checkin-toast'),null,'only once per day');
 });
+
+const longThread=h=>h.d.body.insertAdjacentHTML('beforeend','<nav aria-label="pagination"><span class="pager-cur" href="/post-123-1">1</span><a href="/post-123-2">2</a><a href="/post-123-30">30</a></nav>');
+const replySettings={dailyCheckin:false,autoReply:true,replyText:'参与'};
+
+test('long lottery threads reply after a quick recent-comment check instead of scanning every page',async t=>{
+  const h=setup(t,{settings:replySettings});longThread(h);
+  await h.install().run();
+  assert.deepEqual(h.posts,['参与']);
+  assert.equal(h.threadRequests.length,0,'no page-by-page scan for a 30-page thread');
+  assert.ok(h.historyRequests.length>=3,'recent comments pages 1-3 checked');
+});
+
+test('a reply found in recent comments skips the post without scanning pages',async t=>{
+  const h=setup(t,{settings:replySettings,historyFetch:async url=>({ok:true,status:200,json:async()=>({success:true,comments:String(url).endsWith('page=2')?[{post_id:123,floor_id:250}]:[{post_id:5,floor_id:1}]})})});longThread(h);
+  await h.install().run();
+  assert.equal(h.posts.length,0);assert.equal(h.threadRequests.length,0);
+});
+
+test('if recent comments cannot be loaded, long threads fall back to the full page check',async t=>{
+  const h=setup(t,{settings:replySettings,historyFetch:async()=>({ok:false,status:503,json:async()=>({})}),threadFetch:async url=>{const page=Number(String(url).split('-').at(-1));return {ok:true,status:200,text:async()=>threadPage(123,{page,next:page<30})};}});longThread(h);
+  await h.install().run();
+  assert.equal(h.threadRequests.length,29);assert.deepEqual(h.posts,['参与']);
+});

@@ -2,6 +2,9 @@
   const AUTO_TASK_RUNTIME_KEY = '__nsitAutomaticTasks__';
   const AUTO_TASK_PAGE_CONCURRENCY = 3;
   const AUTO_TASK_PAGE_STAGGER_MS = 120;
+  // 超过这么多页的帖子不再逐页核实，改用最近评论判断
+  const AUTO_TASK_FULL_CHECK_PAGES = 6;
+  const AUTO_TASK_HISTORY_PAGES = 3;
 
   function autoTaskRead(key, fallback = null) {
     try {
@@ -42,7 +45,7 @@
     if (!dialog) {
       injectStyles(`.nsit-auto-modal{position:fixed;z-index:2147483647;inset:0;display:grid;place-items:center;padding:16px;background:var(--nsit-scrim);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--nsit-ink)}.nsit-auto-modal[hidden]{display:none}.nsit-auto-dialog{box-sizing:border-box;width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--nsit-line-strong);border-radius:12px;background:var(--nsit-surface);box-shadow:0 12px 40px var(--nsit-shadow-soft)}.nsit-auto-dialog header{display:flex;align-items:center;justify-content:space-between;gap:12px}.nsit-auto-dialog h2{margin:0;font-size:17px}.nsit-auto-dialog label{display:block;margin:16px 0 6px}.nsit-auto-choice{display:flex;flex-wrap:wrap;gap:4px 18px;margin:4px 0 0 22px}.nsit-auto-dialog .nsit-auto-choice label{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:13px}.nsit-auto-dialog p{margin:6px 0;color:var(--nsit-muted);font-size:12px}.nsit-auto-dialog textarea{box-sizing:border-box;width:100%;min-height:90px;padding:9px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;resize:vertical}.nsit-auto-dialog button{padding:5px 12px;border:1px solid var(--nsit-line-strong);border-radius:6px;background:var(--nsit-sunken);color:var(--nsit-ink);font:inherit;cursor:pointer}.nsit-auto-dialog footer{display:flex;align-items:center;gap:10px;margin-top:18px}.nsit-auto-dialog button[type=submit]{border-color:var(--nsit-accent);background:var(--nsit-accent-soft);color:var(--nsit-accent-ink)}.nsit-auto-dialog [role=status]{color:var(--nsit-accent-ink);font-size:12px}`);
       dialog = document.createElement('div'); dialog.className = 'nsit-auto-modal'; dialog.dataset.nsitAutoDialog = ''; dialog.hidden = true;
-      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 任意页面（含主页）即自动签到，无需点击；成功后页面顶部提示获得的鸡腿数，5 秒后自动消失。跨天后继续检查。</p><div class="nsit-auto-choice" role="radiogroup" aria-label="签到奖励"><label><input type="radio" name="checkinMode" value="fixed"> 固定鸡腿</label><label><input type="radio" name="checkinMode" value="random"> 随机鸡腿（试试手气）</label></div><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；直接通过接口发送，停留在当前页，不动回复框里的草稿。</p><p>发送前核实本帖各页回复，不受个人历史评论数量影响；分页核实失败时跳过，避免重复回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
+      dialog.innerHTML = '<section class="nsit-auto-dialog" role="dialog" aria-modal="true" aria-labelledby="nsit-auto-title"><header><h2 id="nsit-auto-title">自动任务</h2><button type="button" data-nsit-auto-close aria-label="关闭自动任务">×</button></header><form><label><input type="checkbox" name="threadDefaultCollapsed"> 楼中楼默认折叠</label><p>勾选后默认折叠对话，取消勾选则默认展开；更改并保存后立即应用当前页，也用于之后打开的帖子。</p><label><input type="checkbox" name="dailyCheckin"> 每日自动签到</label><p>打开 NodeSeek 任意页面（含主页）即自动签到，无需点击；成功后页面顶部提示获得的鸡腿数，5 秒后自动消失。跨天后继续检查。</p><div class="nsit-auto-choice" role="radiogroup" aria-label="签到奖励"><label><input type="radio" name="checkinMode" value="fixed"> 固定鸡腿</label><label><input type="radio" name="checkinMode" value="random"> 随机鸡腿（试试手气）</label></div><p data-nsit-auto-status="checkin"></p><label><input type="checkbox" name="autoReply"> 抽奖帖自动回复</label><label for="nsit-auto-reply-text">自定义回复语句</label><textarea id="nsit-auto-reply-text" name="replyText" maxlength="500" placeholder="填写后开启自动回复"></textarea><p>打开帖子后，检测楼主正文中的官方抽奖链接（/lucky?post=…&mode=view），自动发送已保存的语句。</p><p>只在当前抽奖帖尝试一次。已回复、已开奖、自己发起的帖子会跳过；直接通过接口发送，停留在当前页，不动回复框里的草稿。</p><p>发送前先查自己最近的评论；6 页以内的帖子再逐页核实，楼层很多的帖子不再逐页翻，避免太慢或被限流后不回复。</p><p data-nsit-auto-status="reply"></p><footer><button type="submit">保存设置</button><span role="status" data-nsit-auto-message></span></footer></form></section>';
       document.body.append(dialog);
       const close = () => { dialog.hidden = true; };
       dialog.querySelector('[data-nsit-auto-close]').addEventListener('click', close);
@@ -83,6 +86,23 @@
 
   function nodeSeekCommentError(response, payload) {
     return response.ok && payload?.success === true ? '' : String(payload?.message || payload?.error || `HTTP ${response.status}`);
+  }
+
+  // 并发拉自己最近几页评论。checked 表示全部拉到了；任何一页失败都算没查过。
+  async function automaticTaskRecentReply(uid, postId, request) {
+    const pages = await Promise.all(Array.from({ length: AUTO_TASK_HISTORY_PAGES }, async (_, index) => {
+      try {
+        const { response, payload } = await request(`/api/content/list-comments?uid=${encodeURIComponent(uid)}&page=${index + 1}`, { cache: 'no-store' });
+        return response.ok && payload?.success && Array.isArray(payload.comments) ? payload : null;
+      } catch (_) { return null; }
+    }));
+    let found = false;
+    for (const payload of pages) {
+      if (!payload) continue;
+      mergeRepliedComments(payload);
+      if (payload.comments.some(comment => String(comment?.post_id) === postId)) found = true;
+    }
+    return { found, checked: pages.every(Boolean) };
   }
 
   function automaticTaskHasReply(uid, postId) {
@@ -207,6 +227,14 @@
         includePages(document);
         // 当前页已在页面上，由 automaticTaskHasReply 检查，不再重复抓取。
         const here = currentPostPage();
+        // 先查自己最近的评论（几次小 JSON 请求）：回过本帖的话大多在这里就能发现。
+        status('reply', '正在核实本帖回复…');
+        const history = await automaticTaskRecentReply(uid, postId, request);
+        if (stop || disposed || currentNodeSeekUserId() !== uid || currentPostId() !== postId) return false;
+        if (history.found) { status('reply', '本帖已有回复，已跳过'); return false; }
+        // 楼层很多的抽奖帖逐页核实又慢又容易被限流（失败就不回复了），
+        // 最近评论已经查过时直接发送；页数少时仍逐页核实。
+        if (history.checked && lastPage - (here <= lastPage ? 1 : 0) > AUTO_TASK_FULL_CHECK_PAGES) return true;
         // 查当前帖的完整评论，而不是要求读完账号的全部历史评论。
         async function check(page) {
           const path = `/post-${postId}-${page}`;
