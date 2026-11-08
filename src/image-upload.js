@@ -31,6 +31,33 @@
     return true;
   }
 
+  function isTouchDevice() {
+    return Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+  }
+
+  // 手机相册里的照片动辄 3～10 MB，走流量上传又慢又费：触屏设备上把大照片等比缩到
+  // 最长边 2560、转 JPEG 再传。动图、小图、解不开的格式和压完反而更大的都原样上传；
+  // PNG 多是截图，门槛放高些，转 JPEG 前铺白底免得透明处变黑。
+  const PHONE_PHOTO_MAX_SIDE = 2560;
+  async function shrinkPhoneImage(file) {
+    if (!isTouchDevice() || typeof createImageBitmap !== 'function' || !/^image\/(jpeg|png|webp|heic|heif)$/i.test(file?.type || '')) return file;
+    if (file.size < (/png/i.test(file.type) ? 3 : 1.5) * 1024 * 1024) return file;
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch (_) { return file; }
+    try {
+      const scale = Math.min(1, PHONE_PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) return file;
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], `${String(file.name || 'photo').replace(/\.[^.]+$/, '') || 'photo'}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+    } catch (_) { return file; } finally { bitmap.close?.(); }
+  }
+
   function installImageUploads(app) {
     if (app._nsitImageUploads) return;
     const scope = app._nsitEditor;
@@ -113,7 +140,7 @@
       pending += jobs.length;
       renderStatus();
       for (const job of jobs) {
-        uploadNodeImage(job.file).then(markdown => {
+        shrinkPhoneImage(job.file).then(uploadNodeImage).then(markdown => {
           settle(job, job.prefix + markdown); completed++;
         }).catch(error => {
           settle(job, job.original); failed.push({ file: job.file, error });

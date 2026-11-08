@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.91
+// @version      1.4.92
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.91';
+  const VERSION = '1.4.92';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -6361,6 +6361,33 @@ let imageUploadSequence = 0;
     return true;
   }
 
+  function isTouchDevice() {
+    return Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+  }
+
+  // 手机相册里的照片动辄 3～10 MB，走流量上传又慢又费：触屏设备上把大照片等比缩到
+  // 最长边 2560、转 JPEG 再传。动图、小图、解不开的格式和压完反而更大的都原样上传；
+  // PNG 多是截图，门槛放高些，转 JPEG 前铺白底免得透明处变黑。
+  const PHONE_PHOTO_MAX_SIDE = 2560;
+  async function shrinkPhoneImage(file) {
+    if (!isTouchDevice() || typeof createImageBitmap !== 'function' || !/^image\/(jpeg|png|webp|heic|heif)$/i.test(file?.type || '')) return file;
+    if (file.size < (/png/i.test(file.type) ? 3 : 1.5) * 1024 * 1024) return file;
+    let bitmap;
+    try { bitmap = await createImageBitmap(file); } catch (_) { return file; }
+    try {
+      const scale = Math.min(1, PHONE_PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) return file;
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+      if (!blob || blob.size >= file.size) return file;
+      return new File([blob], `${String(file.name || 'photo').replace(/\.[^.]+$/, '') || 'photo'}.jpg`, { type: 'image/jpeg', lastModified: file.lastModified });
+    } catch (_) { return file; } finally { bitmap.close?.(); }
+  }
+
   function installImageUploads(app) {
     if (app._nsitImageUploads) return;
     const scope = app._nsitEditor;
@@ -6443,7 +6470,7 @@ let imageUploadSequence = 0;
       pending += jobs.length;
       renderStatus();
       for (const job of jobs) {
-        uploadNodeImage(job.file).then(markdown => {
+        shrinkPhoneImage(job.file).then(uploadNodeImage).then(markdown => {
           settle(job, job.prefix + markdown); completed++;
         }).catch(error => {
           settle(job, job.original); failed.push({ file: job.file, error });
@@ -6583,9 +6610,20 @@ function installReplyKeyboard(app) {
     panel.setAttribute('role', 'group'); panel.setAttribute('aria-label', '编辑工具'); panel.hidden = true;
     const nativePopover = typeof panel.showPopover === 'function';
     if (nativePopover) panel.setAttribute('popover', 'auto');
-    const controls = Array.from(app.children).filter(node => node.matches('.nsit-trigger, .nsit-image-trigger, [data-nsit-image-files], [data-nsit-image-status]'));
+    // 手机上没法 Ctrl+V，传图全靠按钮：触屏设备把「📷 图片」和上传进度留在外面，一下就能点到。
+    const touch = Boolean(window.matchMedia?.('(pointer: coarse)').matches);
+    const keepOutside = touch ? '.nsit-image-trigger, [data-nsit-image-files], [data-nsit-image-status]' : null;
+    const controls = Array.from(app.children).filter(node => node.matches('.nsit-trigger, .nsit-image-trigger, [data-nsit-image-files], [data-nsit-image-status]') && !(keepOutside && node.matches(keepOutside)));
     for (const control of controls) panel.append(control);
     toolbox.append(toggle, panel); app.prepend(toolbox);
+    if (touch) {
+      app.classList.add('nsit-touch');
+      const imageButton = app.querySelector(':scope > .nsit-image-trigger'), imageStatus = app.querySelector(':scope > [data-nsit-image-status]');
+      if (imageButton) { imageButton.textContent = '📷 图片'; imageButton.title = '从相册选图或拍照，自动上传到 NodeImage'; toolbox.before(imageButton); }
+      if (imageStatus) app.append(imageStatus);
+      // 按钮加高到 34px 好点；一行放不下就折行，上传进度单独占一行。
+      injectStyles(`:has(> #${APP_ID}.nsit-touch){flex-wrap:wrap;row-gap:6px}#${APP_ID}.nsit-touch>.nsit-image-trigger,#${APP_ID}.nsit-touch .nsit-sticker-toggle,#${APP_ID}.nsit-touch .nsit-tools-toggle,#${APP_ID}.nsit-touch .nsit-quick-reply{height:34px}#${APP_ID}.nsit-touch>.nsit-image-trigger{display:inline-flex;align-items:center;justify-content:center;width:auto;min-width:0;padding:4px 10px;touch-action:manipulation}#${APP_ID}.nsit-touch .nsit-tools-panel .nsit-trigger{height:36px}#${APP_ID}.nsit-touch>[data-nsit-image-status]{flex:1 0 100%;order:99;min-width:0;overflow-wrap:anywhere}#${APP_ID}.nsit-touch>[data-nsit-image-status] button{min-height:30px;padding:2px 10px}@media(max-width:440px){#${APP_ID}.nsit-touch>.nsit-image-trigger,#${APP_ID}.nsit-touch .nsit-sticker,#${APP_ID}.nsit-touch .nsit-toolbox,#${APP_ID}.nsit-touch .nsit-quick-reply{margin-right:5px}#${APP_ID}.nsit-touch>.nsit-image-trigger,#${APP_ID}.nsit-touch .nsit-sticker-toggle,#${APP_ID}.nsit-touch .nsit-tools-toggle{padding-inline:7px}#${APP_ID}.nsit-touch .nsit-tools-toggle{min-width:0}.window_header:has(> #${APP_ID}.nsit-touch) > a[href*="runoob.com/markdown"]{display:none}}`);
+    }
     injectStyles(`#${APP_ID} .nsit-toolbox{display:inline-flex;align-items:center;flex:none;vertical-align:middle;margin:0 7px 0 0}#${APP_ID} .nsit-tools-toggle{display:inline-flex;align-items:center;justify-content:center;gap:3px;box-sizing:border-box;min-width:76px;height:26px;margin:0;padding:3px 8px;border:1px solid var(--nsit-accent);border-radius:5px;background:var(--nsit-accent-soft);color:var(--nsit-accent-ink);font:600 13px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:nowrap;cursor:pointer}#${APP_ID} .nsit-tools-toggle::after{content:'▾';font-size:10px}#${APP_ID} .nsit-tools-toggle[data-busy]::after{content:'◌';animation:nsit-generation-spin 1s linear infinite}#${APP_ID} .nsit-tools-panel{position:fixed;z-index:2147483646;inset:auto;margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:12px;border:1px solid var(--nsit-line-strong);border-radius:9px;background:var(--nsit-surface);color:var(--nsit-ink);box-shadow:0 8px 28px var(--nsit-shadow-soft);font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}#${APP_ID} .nsit-tools-panel[hidden]{display:none!important}#${APP_ID} .nsit-tools-panel .nsit-trigger,#${APP_ID} .nsit-tools-panel .nsit-image-trigger{flex:none;display:inline-flex;align-items:center;justify-content:center;width:auto;min-width:70px;height:26px;margin:0;white-space:nowrap}#${APP_ID} .nsit-tools-panel>.nsit-trigger:first-child,#${APP_ID} .nsit-tools-panel>.nsit-image-trigger{width:70px}#${APP_ID} .nsit-tools-panel [data-nsit-image-status]{flex:1 0 100%;max-width:420px;overflow-wrap:anywhere}.message-input .mde-toolbar>#${APP_ID} .nsit-toolbox{align-self:center;margin-left:auto}`);
     const controller = new AbortController();
     const options = { signal: controller.signal };

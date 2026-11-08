@@ -8,7 +8,7 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // 照站点私信组件的结构：纯文本 textarea（Markdown 关）/ 工具栏 + CodeMirror（Markdown 开）/ 底部开关与发送按钮。
 const page='<div class="message-input"><textarea name="message-input" class="input-area"></textarea><div class="input-area" style="display: none;"><div class="mde-toolbar"></div><div class="cm-wrapper"><div id="code-mirror-editor"><div class="CodeMirror"><textarea></textarea></div></div></div></div><div style="display: flex;"><span>Markdown</span><label class="vue-js-switch"><input type="checkbox" class="v-switch-input"></label><button class="btn">发送</button></div></div>';
 
-async function setup(t,file,{markdown=false,stickers}={}) {
+async function setup(t,file,{markdown=false,stickers,touch=false}={}) {
   const dom=new JSDOM(`<html><head></head><body>${page}</body></html>`,{url:'https://www.nodeseek.com/notification#/message?mode=talk&to=7',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,d=w.document,observers=[],NativeObserver=w.MutationObserver;
   w.MutationObserver=class extends NativeObserver{constructor(callback){super(callback);observers.push(this);}};
@@ -22,7 +22,7 @@ async function setup(t,file,{markdown=false,stickers}={}) {
   let uploads=0;
   w.GM_xmlhttpRequest=options=>{queueMicrotask(()=>options.onload({status:200,response:options.method==='GET'?{api_key:'k'}:{success:true,links:{markdown:`![image](https://cdn.nodeimage.com/i/pm-${++uploads}.png)`}}}));return {abort(){}};};
   w.fetch=async()=>({ok:false,status:503,json:async()=>({})});
-  w.scrollTo=()=>{};w.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
+  w.scrollTo=()=>{};w.matchMedia=query=>({matches:touch&&/pointer:\s*coarse/.test(query),addEventListener(){},removeEventListener(){}});
   const plain=d.querySelector('.message-input > textarea'),md=d.querySelector('.message-input > div.input-area');
   let value='',cursor=0;
   const cm={getValue:()=>value,setValue(v){value=v;cursor=0;},focus(){},refresh(){},on(){},getInputField:()=>d.querySelector('.CodeMirror textarea'),getOption:()=>false,
@@ -86,5 +86,31 @@ for(const file of ['NodeSeek Issue Templates.user.js','NodeSeek Issue Templates.
     h.d.querySelector('.vue-js-switch input').click();
     h.setValue('markdown 内容');
     key(h.d.querySelector('.CodeMirror textarea'));assert.equal(h.sends(),2);
+  });
+
+  test(`${file}: on phones the image button sits outside the tools menu and shows upload progress there`,async t=>{
+    const h=await setup(t,file,{touch:true});
+    const app=h.d.getElementById('nsit-app'),button=app.querySelector('.nsit-image-trigger'),status=app.querySelector('[data-nsit-image-status]');
+    assert.ok(app.classList.contains('nsit-touch'));
+    assert.equal(button.closest('.nsit-tools-panel'),null);
+    assert.equal(button.textContent,'📷 图片');
+    assert.equal(button.nextElementSibling,app.querySelector('.nsit-sticker'),'image button comes first, then stickers');
+    assert.equal(status.closest('.nsit-tools-panel'),null);
+    const picker=app.querySelector('[data-nsit-image-files]');
+    let opened=0;picker.click=()=>opened++;
+    button.click();assert.equal(opened,1,'one tap opens the photo picker');
+    const image=new h.w.File(['x'],'IMG_1.jpg',{type:'image/jpeg'});
+    Object.defineProperty(picker,'files',{configurable:true,value:[image]});
+    picker.dispatchEvent(new h.w.Event('change'));
+    assert.match(status.textContent,/正在上传 1 张图片/);
+    assert.equal(status.hidden,false);
+    for(let i=0;i<8;i++)await pause(0);
+    assert.match(h.value(),/pm-1\.png/);
+  });
+
+  test(`${file}: on desktop the image button stays inside the tools menu`,async t=>{
+    const {d}=await setup(t,file);
+    assert.ok(d.querySelector('.nsit-tools-panel .nsit-image-trigger'));
+    assert.equal(d.getElementById('nsit-app').classList.contains('nsit-touch'),false);
   });
 }
