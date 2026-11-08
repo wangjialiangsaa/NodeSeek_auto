@@ -50,11 +50,16 @@
     app._nsitEditor = editor;
     const closeButton = app.querySelector('.nsit-shell [data-action="close"]');
     if (closeButton) closeButton.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    const privateMessageToolbar = editor.closest('.message-input')
+    // 私信页：站点默认关着 Markdown，带 .mde-toolbar 的那块整体被 v-show 隐藏，挂在里面
+    // 就看不到。改挂到始终显示的底部「Markdown 开关 / 发送」栏，放在发送按钮左边。
+    const messageBox = editor.closest('.message-input');
+    const privateMessageSend = messageBox ? privateMessageSendButton(messageBox) : null;
+    const privateMessageToolbar = messageBox && !privateMessageSend
       ? editor.closest('#code-mirror-editor')?.closest('.cm-wrapper')?.previousElementSibling
       : null;
     const insidePrivateMessageToolbar = Boolean(privateMessageToolbar?.matches('.mde-toolbar'));
-    if (insidePrivateMessageToolbar) privateMessageToolbar.append(app);
+    if (privateMessageSend) { app.classList.add('nsit-message-bar'); privateMessageSend.before(app); }
+    else if (insidePrivateMessageToolbar) privateMessageToolbar.append(app);
     else {
       const hint = document.querySelector('#editor-body .window_header a[href*="runoob.com/markdown"]');
       if (hint?.parentElement) hint.parentElement.prepend(app);

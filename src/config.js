@@ -1,5 +1,5 @@
   const APP_ID = 'nsit-app';
-  const VERSION = '1.4.90';
+  const VERSION = '1.4.91';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -23,6 +23,7 @@
     ['authorInfo', '用户资料', '楼主和各楼层的等级、鸡腿、星辰、主题、评论和加入天数'],
     ['postFilter', '过滤', '个人信息统计栏里的关键词屏蔽 / 高亮设置入口'],
     ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
+    ['liveReplies', '回复自动更新', '读到帖子末页后每 20 秒左右自动拉取新回复并直接插入（需开启楼中楼阅读）'],
     ['homeAutoLoad', '主页自动加载', '主页帖子列表下滑自动续页，保留当前排序和过滤设置'],
   ];
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));

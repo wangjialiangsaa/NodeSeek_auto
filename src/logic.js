@@ -2313,6 +2313,7 @@
 
   function setEditorContent(app, content) {
     const target = editorTarget(app);
+    ensureMessageMarkdown(target);
     const codeMirror = target?.matches?.('.CodeMirror') ? target : target?.querySelector?.('.CodeMirror');
     if (codeMirror && codeMirror.CodeMirror && typeof codeMirror.CodeMirror.setValue === 'function') {
       codeMirror.CodeMirror.setValue(content);
@@ -2332,6 +2333,7 @@
     const content = String(text || '').trim();
     if (!content) return false;
     const target = editorTarget(app);
+    ensureMessageMarkdown(target);
     const codeMirror = target?.matches?.('.CodeMirror') ? target : target?.querySelector?.('.CodeMirror');
     if (codeMirror?.CodeMirror && typeof codeMirror.CodeMirror.getValue === 'function' && typeof codeMirror.CodeMirror.setValue === 'function') {
       const editor = codeMirror.CodeMirror;

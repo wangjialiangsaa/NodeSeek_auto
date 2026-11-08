@@ -365,30 +365,10 @@ function installThreadedReading() {
     const controller=new AbortController(); s.loadController=controller;
     const timeout=setTimeout(()=>controller.abort(),15000);
     try {
-      const response=await fetch(url,{credentials:'same-origin',signal:controller.signal});
-      if(!response.ok) throw new Error(`HTTP ${response.status}`);
-      const final=new URL(response.url || url,location.href);
-      if(final.origin!==location.origin || final.pathname.replace(/\/$/,'')!==`/post-${s.topic}-${page}`) throw new Error('分页跳转异常');
-      const doc=new DOMParser().parseFromString(await response.text(),'text/html');
-      if(!doc.querySelector('ul.comments')) throw new Error('未取得评论，请先完成站点登录或验证');
+      const doc=await fetchTopicPage(s,url,page,controller);
       if(state!==s || controller.signal.aborted || route()?.topic!==s.topic || route()?.page!==s.page) return;
-      const config=pageConfig(doc);
-      const existing=new Set([...s.list.querySelectorAll(':scope > li.content-item')].map(n=>n.id));
-      const cards=[];
-      for(const remote of doc.querySelectorAll('ul.comments > li.content-item')) {
-        if(!/^\d+$/.test(remote.id) || Number(remote.id)<=0 || existing.has(remote.id)) continue;
-        if(!remote.querySelector('article.post-content')) continue;
-        const card=document.importNode(remote,true); sanitizeCard(card,page,s.topic);
-        existing.add(card.id); s.known.add(Number(card.id)); cards.push(card);
-      }
-      observer.disconnect();
-      try {
-        for(const card of cards) { placeImportedCard(s,card); s.imported.set(card.id,card); mountLoadedMenu(s,card,config); }
-        s.loadedPages.add(page);
-        if(page>=s.loadedThrough) { s.nextURL=nextPage(doc,s,page); s.loadedThrough=page; }
-        if(restoring) s.restorePages.shift();
-      } finally { observe(); }
-      refresh();
+      if(restoring) s.restorePages.shift();
+      importTopicPage(s,doc,page,false);
     } catch(error) {
       if(state===s && !controller.signal.aborted) { s.loadError=error.message; s.retryAfter=Date.now()+5000; }
       else if(state===s && route()?.topic===s.topic) { s.loadError='请求超时'; s.retryAfter=Date.now()+5000; }
@@ -400,6 +380,86 @@ function installThreadedReading() {
         if(!s.loadError) requestAnimationFrame(()=>{ if(state===s) { if(s.restorePages.length) loadNext(s); else maybeLoad(s); } });
       }
     }
+  }
+  async function fetchTopicPage(s,url,page,controller) {
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const final=new URL(response.url || url,location.href);
+    if(final.origin!==location.origin || final.pathname.replace(/\/$/,'')!==`/post-${s.topic}-${page}`) throw new Error('分页跳转异常');
+    const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+    if(!doc.querySelector('ul.comments')) throw new Error('未取得评论，请先完成站点登录或验证');
+    return doc;
+  }
+  // 把取回页面里还没有的楼层插进当前列表；live=true 时标成新回复（顶栏「N 条新回复 · 定位」）。
+  function importTopicPage(s,doc,page,live) {
+    const config=pageConfig(doc);
+    const existing=new Set([...s.list.querySelectorAll(':scope > li.content-item')].map(n=>n.id));
+    const cards=[];
+    for(const remote of doc.querySelectorAll('ul.comments > li.content-item')) {
+      if(!/^\d+$/.test(remote.id) || Number(remote.id)<=0 || existing.has(remote.id)) continue;
+      if(!remote.querySelector('article.post-content')) continue;
+      const card=document.importNode(remote,true); sanitizeCard(card,page,s.topic);
+      existing.add(card.id); s.known.add(Number(card.id)); cards.push(card);
+      if(live) s.pending.add(Number(card.id));
+    }
+    observer.disconnect();
+    try {
+      for(const card of cards) { placeImportedCard(s,card); s.imported.set(card.id,card); mountLoadedMenu(s,card,config); }
+      s.loadedPages.add(page);
+      if(page>=s.loadedThrough) { s.nextURL=nextPage(doc,s,page); s.loadedThrough=page; }
+    } finally { observe(); }
+    refresh();
+    return cards.length;
+  }
+
+  // 回复自动更新：读到末页后，标签页可见时每 20 秒左右拉一次已加载的最后一页，
+  // 新楼层直接插进列表（带原生菜单）；连续没有新回复逐步放慢到 90 秒，有新回复恢复。
+  // 末页写满出现下一页时交给下滑自动加载接着取。
+  const LIVE_REPLY_BASE=20000, LIVE_REPLY_STEP=10000, LIVE_REPLY_MAX=90000;
+  function liveEnabled() { return featureEnabled('threadedReading') && featureEnabled('liveReplies'); }
+  function scheduleLive(s,delay) {
+    clearTimeout(s.liveTimer); s.liveTimer=0;
+    if(state!==s || !liveEnabled()) return;
+    const wait=delay ?? Math.min(LIVE_REPLY_MAX,LIVE_REPLY_BASE+(s.liveIdle||0)*LIVE_REPLY_STEP);
+    s.liveTimer=setTimeout(()=>{ s.liveTimer=0; checkLatest(s,false); },wait);
+  }
+  function setCheckLabel(s,text,title='') {
+    if(!s.check) return;
+    s.check.textContent=text; s.check.title=title || (liveEnabled()?'已开启回复自动更新；点击立即检查最后一页':'检查当前已加载的最后一页是否出现新回复');
+    clearTimeout(s.checkLabelTimer);
+    if(text!=='检查新回复' && text!=='检查中…') s.checkLabelTimer=setTimeout(()=>{ if(s.check?.textContent===text) setCheckLabel(s,'检查新回复'); },4000);
+  }
+  async function checkLatest(s,manual) {
+    if(state!==s) return 0;
+    if(!manual && (document.hidden || !liveEnabled())) { scheduleLive(s); return 0; }
+    if(s.loading || s.restorePages.length) { if(!manual) scheduleLive(s,5000); return 0; }
+    // 还没读到末页：手动点就接着加载下一页，自动检查等用户下滑。
+    if(s.nextURL) { if(manual) loadNext(s); else scheduleLive(s); return 0; }
+    clearTimeout(s.liveTimer); s.liveTimer=0;
+    s.loading=true; s.lastLiveCheck=Date.now();
+    if(manual) { s.check.disabled=true; setCheckLabel(s,'检查中…'); }
+    const page=s.loadedThrough, controller=new AbortController(); s.loadController=controller;
+    const timeout=setTimeout(()=>controller.abort(),12000);
+    let added=0;
+    try {
+      const doc=await fetchTopicPage(s,`/post-${s.topic}-${page}`,page,controller);
+      if(state!==s || controller.signal.aborted || route()?.topic!==s.topic || route()?.page!==s.page) return 0;
+      added=importTopicPage(s,doc,page,true);
+      s.liveIdle=added?0:(s.liveIdle||0)+1;
+      if(added) persist(s);
+      if(manual || added) setCheckLabel(s,added?`新增 ${added} 条回复`:(s.nextURL?'有新分页 · 下滑加载':'末页暂无新增'));
+    } catch(error) {
+      s.liveIdle=(s.liveIdle||0)+1;
+      if(manual && state===s) setCheckLabel(s,'检查失败 · 重试',error.name==='AbortError'?'请求超时':error.message);
+    } finally {
+      clearTimeout(timeout); s.loading=false;
+      if(state===s) {
+        if(s.check) s.check.disabled=false;
+        loadingStatus(s); scheduleFrame(); scheduleLive(s);
+        if(s.nextURL) requestAnimationFrame(()=>{ if(state===s) maybeLoad(s); });
+      }
+    }
+    return added;
   }
   function maybeLoad(s) {
     if(!s?.loader.isConnected || document.hidden) return;
@@ -426,6 +486,7 @@ function installThreadedReading() {
     }
     loadingStatus(s);
     if(s.restorePages.length) queueMicrotask(()=>loadNext(s));
+    s.liveIdle=0; setCheckLabel(s,'检查新回复'); scheduleLive(s);
   }
 
   // A per-tab, one-use marker survives the native editor's reload or last-page redirect.
@@ -704,31 +765,9 @@ function installThreadedReading() {
     const check = el('button', '', '检查新回复');
     check.type = 'button';
     check.title = '检查当前已加载的最后一页是否出现新回复';
-    check.addEventListener('click', async () => {
-      if (check.dataset.reload) { location.reload(); return; }
-      check.disabled = true; check.textContent = '检查中…';
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-      try {
-        const response = await fetch(`/post-${s.topic}-${s.loadedThrough}`, { credentials:'same-origin', cache:'no-store', signal:controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-        if (!doc.querySelector('.content-item[id="0"],ul.comments')) throw new Error('未取得帖子页面，请稍后重试');
-        const fresh = [...doc.querySelectorAll('ul.comments > li.content-item')].filter(n => /^\d+$/.test(n.id) && !s.known.has(Number(n.id)));
-        const next = [...doc.querySelectorAll('[aria-label="pagination"] a[href]')].some(a => {
-          const m = a.getAttribute('href').match(new RegExp(`^/post-${s.topic}-(\\d+)`));
-          return m && Number(m[1]) > s.maxPage;
-        });
-        if (state !== s) return;
-        if (fresh.length || next) {
-          check.textContent = fresh.length ? `发现 ${fresh.length} 条 · 刷新` : '有新增分页 · 刷新';
-          check.dataset.reload = '1';
-        } else check.textContent = '末页暂无新增';
-      } catch (error) {
-        check.textContent = '检查失败 · 重试'; check.title = error.name === 'AbortError' ? '请求超时' : error.message;
-      } finally { clearTimeout(timeout); check.disabled = false; }
-    });
-    bar.append(check);
+    // 新回复直接插进列表，不再整页刷新。
+    check.addEventListener('click', () => { void checkLatest(s,true); });
+    s.check = check; bar.append(check);
     s.status = el('span', 'nst-status'); bar.append(s.status);
     const progress = el('div', 'nst-progress');
     progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', '本页阅读进度');
@@ -835,6 +874,7 @@ function installThreadedReading() {
   function cleanup() {
     if (!state) return;
     persist(state);
+    clearTimeout(state.liveTimer); clearTimeout(state.checkLabelTimer);
     state.loadController?.abort(); state.intersection?.disconnect(); state.editorResize?.disconnect();
     state.nativeMenus?.forEach(menu=>menu.$destroy?.());
     const records=pageWindow().__config__?.postData?.comments;
@@ -982,6 +1022,14 @@ function installThreadedReading() {
     if (!event.repeat) openEditor(s,true);
   },true);
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
+  // 快速回复、抽奖自动回复通过接口发完后立即拉一次，自己的回复马上出现。
+  document.addEventListener('nsit:check-new-replies', () => { if (state && liveEnabled()) void checkLatest(state,true); });
+  // 切回标签页时，距上次检查超过一个周期就立即补查一次。
+  document.addEventListener('visibilitychange', () => {
+    const s = state;
+    if (!s || document.hidden || !liveEnabled() || s.loading) return;
+    if (Date.now() - (s.lastLiveCheck || 0) >= LIVE_REPLY_BASE) void checkLatest(s,false);
+  });
   document.addEventListener('click',rememberReplyContext,true);
   document.addEventListener('submit',rememberReplyContext,true);
   document.addEventListener('nsit:reveal-floor', event => revealFloor(event.detail?.floor));

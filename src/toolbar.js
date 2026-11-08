@@ -1,23 +1,28 @@
   function installReplyKeyboard(app) {
     const editor = app._nsitEditor;
-    if (!editor || !/^\/post-\d+-\d+\/?$/.test(location.pathname)) return;
-    editor._nsitReplyKeyboardController?.abort();
+    // 私信页（/notification#/message?mode=talk）也一样：回车发送，Shift+回车换行；
+    // 纯文本框和 Markdown 编辑器都在 .message-input 里，监听挂在整个输入区上。
+    const messageBox = editor?.closest?.('.message-input') || null;
+    const onPost = () => /^\/post-\d+-\d+\/?$/.test(location.pathname);
+    if (!editor || (!messageBox && !onPost())) return;
+    const host = messageBox || editor;
+    host._nsitReplyKeyboardController?.abort();
     const controller = new AbortController();
-    editor._nsitReplyKeyboardController = controller;
+    host._nsitReplyKeyboardController = controller;
     const options = { capture: true, signal: controller.signal };
     let composing = false;
-    editor.addEventListener('compositionstart', () => { composing = true; }, options);
-    editor.addEventListener('compositionend', () => { composing = false; }, options);
-    editor.addEventListener('keydown', event => {
-      if (!/^\/post-\d+-\d+\/?$/.test(location.pathname) || event.key !== 'Enter' || event.isComposing || composing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
+    host.addEventListener('compositionstart', () => { composing = true; }, options);
+    host.addEventListener('compositionend', () => { composing = false; }, options);
+    host.addEventListener('keydown', event => {
+      if ((!messageBox && !onPost()) || event.key !== 'Enter' || event.isComposing || composing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (!(target instanceof Element) || target.closest(`#${APP_ID}, .CodeMirror-dialog`)) return;
       const cmElement = target.closest('.CodeMirror');
       const cm = cmElement?.CodeMirror;
       const input = cm?.getInputField?.() || (target.matches('textarea') ? target : null);
       if (!input || (input !== target && !input.contains(target)) || input.disabled || input.readOnly || cm?.getOption?.('readOnly')) return;
-      const area = editor.closest('.md-editor, form, #editor') || editor.parentElement;
-      const submit = Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}`));
+      const area = messageBox || editor.closest('.md-editor, form, #editor') || editor.parentElement;
+      const submit = messageBox ? privateMessageSendButton(messageBox) : Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}`));
       if (!submit || /保存|修改|更新/.test(submit.textContent || submit.value || '')) return;
       // Handle before CodeMirror and native shortcuts so one key makes one action.
       event.preventDefault(); event.stopImmediatePropagation();
@@ -163,6 +168,7 @@
         const error = nodeSeekCommentError(response, await response.json().catch(() => null));
         if (error) { flash(`未发送：${error}`); return; }
         flash('已发送');
+        document.dispatchEvent(new CustomEvent('nsit:check-new-replies'));
         // 与原生「发布评论」一致：参与别人的抽奖时记一笔，并补上「我的回复」楼层标记。
         const draw = luckyDrawForReply();
         if (draw && !luckyIsOwnDraw()) recordParticipation(draw);

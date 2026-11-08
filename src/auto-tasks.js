@@ -352,6 +352,7 @@
         autoTaskWrite(key, { state: 'done', at: Date.now() });
         recordParticipation(draw);
         status('reply', '本帖自动回复成功');
+        document.dispatchEvent(new CustomEvent('nsit:check-new-replies'));
         // 补上「我的回复」楼层标记；失败不影响结果。
         void syncRepliedComments().catch(() => {});
       });

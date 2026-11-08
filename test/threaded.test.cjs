@@ -266,17 +266,49 @@ test('leaving the topic restores styles and removes the controls', async t => {
   assert.equal(d.querySelector('.nst-relation'),null);
 });
 
-test('checking for new replies requires explicit user action and preserves native nodes', async t => {
+test('checking for new replies inserts them in place without reloading the page', async t => {
   let calls = 0;
   const fetch = async () => { calls++; return {ok:true,text:async()=>`<ul class="comments">${reply(1,'one')}${reply(2,'new')}</ul>`}; };
   const { d } = await setup(t,reply(1,'one'),{fetch});
   assert.equal(calls,0);
   const card = d.getElementById('1');
-  [...d.querySelectorAll('.nst-modebar button')].find(n=>n.textContent==='检查新回复').click(); await pause(30);
+  [...d.querySelectorAll('.nst-modebar button')].find(n=>n.textContent==='检查新回复').click(); await pause(150);
   assert.equal(calls,1);
-  assert.ok([...d.querySelectorAll('.nst-modebar button')].some(n=>n.textContent==='发现 1 条 · 刷新'));
+  assert.ok([...d.querySelectorAll('.nst-modebar button')].some(n=>n.textContent==='新增 1 条回复'));
   assert.equal(d.getElementById('1'),card);
-  assert.equal(d.getElementById('2'),null);
+  assert.equal(d.getElementById('2')?.dataset.nstLoaded,'1');
+  assert.ok(d.getElementById('2').classList.contains('nst-new'));
+  assert.match(d.querySelector('.nst-updates').textContent,/1 条新回复/);
+});
+
+test('live replies poll the last page on a timer, skip hidden tabs and slow down when idle', async t => {
+  let calls = 0, body = `<ul class="comments">${reply(1,'one')}</ul>`;
+  const timers = [];
+  const fetch = async () => { calls++; return {ok:true,text:async()=>body}; };
+  let hidden = false;
+  const init = w => {
+    const real = w.setTimeout.bind(w);
+    w.setTimeout = (fn,ms,...args) => ms >= 15000 ? (timers.push({fn,ms}), timers.length) : real(fn,ms,...args);
+    Object.defineProperty(w.document,'hidden',{configurable:true,get:()=>hidden});
+  };
+  const { d } = await setup(t,reply(1,'one'),{fetch,init});
+  const next = () => timers.at(-1);
+  assert.equal(next().ms,20000);
+  assert.equal(calls,0);
+  next().fn(); await pause(150);
+  assert.equal(calls,1,'idle poll fetches the last page');
+  assert.equal(next().ms,30000,'no new reply: slower');
+  body = `<ul class="comments">${reply(1,'one')}${reply(2,'new')}${reply(3,'newer')}</ul>`;
+  next().fn(); await pause(150);
+  assert.equal(calls,2);
+  assert.deepEqual([...d.querySelectorAll('ul.comments > li[data-nst-loaded]')].map(n=>n.id),['2','3']);
+  assert.equal(next().ms,20000,'new replies: back to normal speed');
+  hidden = true;
+  next().fn(); await pause(60);
+  assert.equal(calls,2,'hidden tab is not polled');
+  hidden = false;
+  d.dispatchEvent(new d.defaultView.CustomEvent('nsit:check-new-replies')); await pause(150);
+  assert.equal(calls,3,'sending a reply through the script checks at once');
 });
 
 test('scrolling preserves existing connector nodes when layout has not changed', async t => {

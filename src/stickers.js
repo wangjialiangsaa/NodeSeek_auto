@@ -25,6 +25,7 @@
   function insertStickerText(app, text) {
     const scope = app._nsitEditor;
     if (!scope?.isConnected) return false;
+    ensureMessageMarkdown(scope);
     const wrapper = scope.matches('.CodeMirror') ? scope : scope.querySelector('.CodeMirror');
     const cm = wrapper?.CodeMirror;
     if (cm && typeof cm.replaceSelection === 'function') { cm.replaceSelection(text, 'end'); cm.focus?.(); return true; }

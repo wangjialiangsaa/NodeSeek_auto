@@ -1,5 +1,36 @@
   let imageUploadSequence = 0;
 
+  // 私信输入区：.message-input 下有纯文本 textarea（Markdown 关）和带工具栏的 CodeMirror
+  // （Markdown 开）两套，由站点的 Markdown 开关切换；底部一栏是开关和「发送」按钮。
+  function privateMessageSendButton(box) {
+    return Array.from(box?.querySelectorAll?.('button') || []).find(button => !button.closest(`#${APP_ID}`) && button.textContent.trim() === '发送') || null;
+  }
+
+  function privateMessagePlainInput(scope) {
+    const box = scope?.closest?.('.message-input');
+    return box ? Array.from(box.querySelectorAll('textarea')).find(element => !element.closest('.CodeMirror') && !element.closest(`#${APP_ID}`)) || null : null;
+  }
+
+  // 关着 Markdown 时发出去的图片、表情只是一串文字。插入图片、表情或模板前先替用户
+  // 打开站点自己的 Markdown 开关（站点会把纯文本框里已写的内容带进 CodeMirror），光标放到末尾。
+  function ensureMessageMarkdown(scope) {
+    const plain = privateMessagePlainInput(scope);
+    if (!plain || plain.style.display === 'none') return false;
+    const box = plain.closest('.message-input');
+    const toggle = box.querySelector('.vue-js-switch input') || box.querySelector('.vue-js-switch');
+    if (!toggle) return false;
+    const text = plain.value;
+    toggle.click();
+    const wrapper = scope.matches?.('.CodeMirror') ? scope : box.querySelector('.CodeMirror');
+    const cm = wrapper?.CodeMirror;
+    if (cm && typeof cm.setCursor === 'function') {
+      if (!cm.getValue() && text) cm.setValue(text);
+      const last = cm.lastLine();
+      cm.setCursor({ line: last, ch: cm.getLine(last).length });
+    }
+    return true;
+  }
+
   function installImageUploads(app) {
     if (app._nsitImageUploads) return;
     const scope = app._nsitEditor;
@@ -65,10 +96,11 @@
     }
 
     function start(files, keepSelection = false) {
-      const target = editor();
-      if (!target || !scope.isConnected) return;
       files = Array.from(files).filter(file => file?.type?.startsWith('image/'));
-      if (!files.length) return;
+      if (!files.length || !scope.isConnected) return;
+      ensureMessageMarkdown(scope);
+      const target = editor();
+      if (!target) return;
       const content = target.get();
       const to = target.cm ? target.cm.indexFromPos(target.cm.getCursor('to')) : target.textarea.selectionEnd;
       const from = keepSelection ? to : target.cm ? target.cm.indexFromPos(target.cm.getCursor('from')) : target.textarea.selectionStart;
@@ -117,6 +149,7 @@
     function inEditor(node) {
       const target = editor();
       if (!target || !node || app.contains(node)) return false;
+      if (node === privateMessagePlainInput(scope)) return true;
       return target.cm ? Boolean(node.closest?.('.CodeMirror')) : node === target.textarea;
     }
     function takeImages(event, data) {
@@ -126,13 +159,15 @@
       event.preventDefault(); event.stopImmediatePropagation();
       start(files);
     }
-    scope.addEventListener('paste', event => takeImages(event, event.clipboardData), listenerOptions);
-    scope.addEventListener('drop', event => takeImages(event, event.dataTransfer), listenerOptions);
-    scope.addEventListener('dragover', event => {
+    // 私信页的纯文本框不在 CodeMirror 里，监听挂到整个输入区上。
+    const listenRoot = scope.closest('.message-input') || scope;
+    listenRoot.addEventListener('paste', event => takeImages(event, event.clipboardData), listenerOptions);
+    listenRoot.addEventListener('drop', event => takeImages(event, event.dataTransfer), listenerOptions);
+    listenRoot.addEventListener('dragover', event => {
       if (inEditor(event.target) && Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
     }, listenerOptions);
     // Phone keyboards insert clipboard pictures as rich content: no paste event, only beforeinput.
-    scope.addEventListener('beforeinput', event => {
+    listenRoot.addEventListener('beforeinput', event => {
       if (['insertFromPaste', 'insertFromDrop', 'insertReplacementText'].includes(event.inputType)) takeImages(event, event.dataTransfer);
     }, listenerOptions);
 
@@ -140,7 +175,7 @@
     const postingArea = scope.closest('form, .md-editor, .message-input') || scope.parentElement;
     function blockPendingPost(event) {
       const isPost = event.type === 'submit' || (event.type === 'keydown' && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) ||
-        (event.type === 'click' && event.target.closest?.('button[type="submit"], input[type="submit"], .submit, .submit-button, .send-button, [data-action="submit"]'));
+        (event.type === 'click' && event.target.closest?.('button[type="submit"], input[type="submit"], .submit, .submit-button, .send-button, [data-action="submit"], .message-input button.btn'));
       if (app.contains(event.target) || !isPost) return;
       if (pending) {
         event.preventDefault(); event.stopImmediatePropagation();

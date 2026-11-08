@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NodeSeek auto
 // @namespace    https://www.nodeseek.com/
-// @version      1.4.90
+// @version      1.4.91
 // @description  NodeSeek 自定义背景与毛玻璃、自动文字对比色、交易模板、图片上传、主页自动续页、楼中楼与固定回复栏，支持抽奖自动回复和每日签到。
 // @author       vico, wangjialiangsaa
 // @homepageURL  https://github.com/wangjialiangsaa/NodeSeek_auto
@@ -25,7 +25,7 @@
   'use strict';
 
 const APP_ID = 'nsit-app';
-  const VERSION = '1.4.90';
+  const VERSION = '1.4.91';
   const NODEIMAGE_KEY = 'nsit-nodeimage-api-key';
   const RUNTIME_KEY = '__nodeSeekIssueTemplatesRuntime__';
   const STORAGE_KEY = 'nsit-single-server-draft-v1';
@@ -49,6 +49,7 @@ const APP_ID = 'nsit-app';
     ['authorInfo', '用户资料', '楼主和各楼层的等级、鸡腿、星辰、主题、评论和加入天数'],
     ['postFilter', '过滤', '个人信息统计栏里的关键词屏蔽 / 高亮设置入口'],
     ['threadedReading', '楼中楼阅读', '帖子楼中楼、下滑自动加载下一页和底部固定回复栏'],
+    ['liveReplies', '回复自动更新', '读到帖子末页后每 20 秒左右自动拉取新回复并直接插入（需开启楼中楼阅读）'],
     ['homeAutoLoad', '主页自动加载', '主页帖子列表下滑自动续页，保留当前排序和过滤设置'],
   ];
   const DEFAULT_FEATURE_FLAGS = Object.fromEntries(FEATURE_FLAGS.map(([key]) => [key, true]));
@@ -3335,6 +3336,7 @@ function formValues(app) {
 
   function setEditorContent(app, content) {
     const target = editorTarget(app);
+    ensureMessageMarkdown(target);
     const codeMirror = target?.matches?.('.CodeMirror') ? target : target?.querySelector?.('.CodeMirror');
     if (codeMirror && codeMirror.CodeMirror && typeof codeMirror.CodeMirror.setValue === 'function') {
       codeMirror.CodeMirror.setValue(content);
@@ -3354,6 +3356,7 @@ function formValues(app) {
     const content = String(text || '').trim();
     if (!content) return false;
     const target = editorTarget(app);
+    ensureMessageMarkdown(target);
     const codeMirror = target?.matches?.('.CodeMirror') ? target : target?.querySelector?.('.CodeMirror');
     if (codeMirror?.CodeMirror && typeof codeMirror.CodeMirror.getValue === 'function' && typeof codeMirror.CodeMirror.setValue === 'function') {
       const editor = codeMirror.CodeMirror;
@@ -6327,6 +6330,37 @@ function formValues(app) {
 
 let imageUploadSequence = 0;
 
+  // 私信输入区：.message-input 下有纯文本 textarea（Markdown 关）和带工具栏的 CodeMirror
+  // （Markdown 开）两套，由站点的 Markdown 开关切换；底部一栏是开关和「发送」按钮。
+  function privateMessageSendButton(box) {
+    return Array.from(box?.querySelectorAll?.('button') || []).find(button => !button.closest(`#${APP_ID}`) && button.textContent.trim() === '发送') || null;
+  }
+
+  function privateMessagePlainInput(scope) {
+    const box = scope?.closest?.('.message-input');
+    return box ? Array.from(box.querySelectorAll('textarea')).find(element => !element.closest('.CodeMirror') && !element.closest(`#${APP_ID}`)) || null : null;
+  }
+
+  // 关着 Markdown 时发出去的图片、表情只是一串文字。插入图片、表情或模板前先替用户
+  // 打开站点自己的 Markdown 开关（站点会把纯文本框里已写的内容带进 CodeMirror），光标放到末尾。
+  function ensureMessageMarkdown(scope) {
+    const plain = privateMessagePlainInput(scope);
+    if (!plain || plain.style.display === 'none') return false;
+    const box = plain.closest('.message-input');
+    const toggle = box.querySelector('.vue-js-switch input') || box.querySelector('.vue-js-switch');
+    if (!toggle) return false;
+    const text = plain.value;
+    toggle.click();
+    const wrapper = scope.matches?.('.CodeMirror') ? scope : box.querySelector('.CodeMirror');
+    const cm = wrapper?.CodeMirror;
+    if (cm && typeof cm.setCursor === 'function') {
+      if (!cm.getValue() && text) cm.setValue(text);
+      const last = cm.lastLine();
+      cm.setCursor({ line: last, ch: cm.getLine(last).length });
+    }
+    return true;
+  }
+
   function installImageUploads(app) {
     if (app._nsitImageUploads) return;
     const scope = app._nsitEditor;
@@ -6392,10 +6426,11 @@ let imageUploadSequence = 0;
     }
 
     function start(files, keepSelection = false) {
-      const target = editor();
-      if (!target || !scope.isConnected) return;
       files = Array.from(files).filter(file => file?.type?.startsWith('image/'));
-      if (!files.length) return;
+      if (!files.length || !scope.isConnected) return;
+      ensureMessageMarkdown(scope);
+      const target = editor();
+      if (!target) return;
       const content = target.get();
       const to = target.cm ? target.cm.indexFromPos(target.cm.getCursor('to')) : target.textarea.selectionEnd;
       const from = keepSelection ? to : target.cm ? target.cm.indexFromPos(target.cm.getCursor('from')) : target.textarea.selectionStart;
@@ -6444,6 +6479,7 @@ let imageUploadSequence = 0;
     function inEditor(node) {
       const target = editor();
       if (!target || !node || app.contains(node)) return false;
+      if (node === privateMessagePlainInput(scope)) return true;
       return target.cm ? Boolean(node.closest?.('.CodeMirror')) : node === target.textarea;
     }
     function takeImages(event, data) {
@@ -6453,13 +6489,15 @@ let imageUploadSequence = 0;
       event.preventDefault(); event.stopImmediatePropagation();
       start(files);
     }
-    scope.addEventListener('paste', event => takeImages(event, event.clipboardData), listenerOptions);
-    scope.addEventListener('drop', event => takeImages(event, event.dataTransfer), listenerOptions);
-    scope.addEventListener('dragover', event => {
+    // 私信页的纯文本框不在 CodeMirror 里，监听挂到整个输入区上。
+    const listenRoot = scope.closest('.message-input') || scope;
+    listenRoot.addEventListener('paste', event => takeImages(event, event.clipboardData), listenerOptions);
+    listenRoot.addEventListener('drop', event => takeImages(event, event.dataTransfer), listenerOptions);
+    listenRoot.addEventListener('dragover', event => {
       if (inEditor(event.target) && Array.from(event.dataTransfer?.types || []).includes('Files')) event.preventDefault();
     }, listenerOptions);
     // Phone keyboards insert clipboard pictures as rich content: no paste event, only beforeinput.
-    scope.addEventListener('beforeinput', event => {
+    listenRoot.addEventListener('beforeinput', event => {
       if (['insertFromPaste', 'insertFromDrop', 'insertReplacementText'].includes(event.inputType)) takeImages(event, event.dataTransfer);
     }, listenerOptions);
 
@@ -6467,7 +6505,7 @@ let imageUploadSequence = 0;
     const postingArea = scope.closest('form, .md-editor, .message-input') || scope.parentElement;
     function blockPendingPost(event) {
       const isPost = event.type === 'submit' || (event.type === 'keydown' && event.key === 'Enter' && (event.ctrlKey || event.metaKey)) ||
-        (event.type === 'click' && event.target.closest?.('button[type="submit"], input[type="submit"], .submit, .submit-button, .send-button, [data-action="submit"]'));
+        (event.type === 'click' && event.target.closest?.('button[type="submit"], input[type="submit"], .submit, .submit-button, .send-button, [data-action="submit"], .message-input button.btn'));
       if (app.contains(event.target) || !isPost) return;
       if (pending) {
         event.preventDefault(); event.stopImmediatePropagation();
@@ -6490,24 +6528,29 @@ let imageUploadSequence = 0;
 
 function installReplyKeyboard(app) {
     const editor = app._nsitEditor;
-    if (!editor || !/^\/post-\d+-\d+\/?$/.test(location.pathname)) return;
-    editor._nsitReplyKeyboardController?.abort();
+    // 私信页（/notification#/message?mode=talk）也一样：回车发送，Shift+回车换行；
+    // 纯文本框和 Markdown 编辑器都在 .message-input 里，监听挂在整个输入区上。
+    const messageBox = editor?.closest?.('.message-input') || null;
+    const onPost = () => /^\/post-\d+-\d+\/?$/.test(location.pathname);
+    if (!editor || (!messageBox && !onPost())) return;
+    const host = messageBox || editor;
+    host._nsitReplyKeyboardController?.abort();
     const controller = new AbortController();
-    editor._nsitReplyKeyboardController = controller;
+    host._nsitReplyKeyboardController = controller;
     const options = { capture: true, signal: controller.signal };
     let composing = false;
-    editor.addEventListener('compositionstart', () => { composing = true; }, options);
-    editor.addEventListener('compositionend', () => { composing = false; }, options);
-    editor.addEventListener('keydown', event => {
-      if (!/^\/post-\d+-\d+\/?$/.test(location.pathname) || event.key !== 'Enter' || event.isComposing || composing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
+    host.addEventListener('compositionstart', () => { composing = true; }, options);
+    host.addEventListener('compositionend', () => { composing = false; }, options);
+    host.addEventListener('keydown', event => {
+      if ((!messageBox && !onPost()) || event.key !== 'Enter' || event.isComposing || composing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (!(target instanceof Element) || target.closest(`#${APP_ID}, .CodeMirror-dialog`)) return;
       const cmElement = target.closest('.CodeMirror');
       const cm = cmElement?.CodeMirror;
       const input = cm?.getInputField?.() || (target.matches('textarea') ? target : null);
       if (!input || (input !== target && !input.contains(target)) || input.disabled || input.readOnly || cm?.getOption?.('readOnly')) return;
-      const area = editor.closest('.md-editor, form, #editor') || editor.parentElement;
-      const submit = Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}`));
+      const area = messageBox || editor.closest('.md-editor, form, #editor') || editor.parentElement;
+      const submit = messageBox ? privateMessageSendButton(messageBox) : Array.from(area?.querySelectorAll('button.submit, button[type="submit"], input[type="submit"]') || []).find(node => !node.closest(`#${APP_ID}`));
       if (!submit || /保存|修改|更新/.test(submit.textContent || submit.value || '')) return;
       // Handle before CodeMirror and native shortcuts so one key makes one action.
       event.preventDefault(); event.stopImmediatePropagation();
@@ -6653,6 +6696,7 @@ function installReplyKeyboard(app) {
         const error = nodeSeekCommentError(response, await response.json().catch(() => null));
         if (error) { flash(`未发送：${error}`); return; }
         flash('已发送');
+        document.dispatchEvent(new CustomEvent('nsit:check-new-replies'));
         // 与原生「发布评论」一致：参与别人的抽奖时记一笔，并补上「我的回复」楼层标记。
         const draw = luckyDrawForReply();
         if (draw && !luckyIsOwnDraw()) recordParticipation(draw);
@@ -6693,6 +6737,7 @@ const STICKER_STORAGE_KEY = 'nsit-stickers-v1';
   function insertStickerText(app, text) {
     const scope = app._nsitEditor;
     if (!scope?.isConnected) return false;
+    ensureMessageMarkdown(scope);
     const wrapper = scope.matches('.CodeMirror') ? scope : scope.querySelector('.CodeMirror');
     const cm = wrapper?.CodeMirror;
     if (cm && typeof cm.replaceSelection === 'function') { cm.replaceSelection(text, 'end'); cm.focus?.(); return true; }
@@ -7239,6 +7284,7 @@ const AUTO_TASK_SETTINGS_KEY = 'nsit-auto-settings-v1';
         autoTaskWrite(key, { state: 'done', at: Date.now() });
         recordParticipation(draw);
         status('reply', '本帖自动回复成功');
+        document.dispatchEvent(new CustomEvent('nsit:check-new-replies'));
         // 补上「我的回复」楼层标记；失败不影响结果。
         void syncRepliedComments().catch(() => {});
       });
@@ -7782,30 +7828,10 @@ function installThreadedReading() {
     const controller=new AbortController(); s.loadController=controller;
     const timeout=setTimeout(()=>controller.abort(),15000);
     try {
-      const response=await fetch(url,{credentials:'same-origin',signal:controller.signal});
-      if(!response.ok) throw new Error(`HTTP ${response.status}`);
-      const final=new URL(response.url || url,location.href);
-      if(final.origin!==location.origin || final.pathname.replace(/\/$/,'')!==`/post-${s.topic}-${page}`) throw new Error('分页跳转异常');
-      const doc=new DOMParser().parseFromString(await response.text(),'text/html');
-      if(!doc.querySelector('ul.comments')) throw new Error('未取得评论，请先完成站点登录或验证');
+      const doc=await fetchTopicPage(s,url,page,controller);
       if(state!==s || controller.signal.aborted || route()?.topic!==s.topic || route()?.page!==s.page) return;
-      const config=pageConfig(doc);
-      const existing=new Set([...s.list.querySelectorAll(':scope > li.content-item')].map(n=>n.id));
-      const cards=[];
-      for(const remote of doc.querySelectorAll('ul.comments > li.content-item')) {
-        if(!/^\d+$/.test(remote.id) || Number(remote.id)<=0 || existing.has(remote.id)) continue;
-        if(!remote.querySelector('article.post-content')) continue;
-        const card=document.importNode(remote,true); sanitizeCard(card,page,s.topic);
-        existing.add(card.id); s.known.add(Number(card.id)); cards.push(card);
-      }
-      observer.disconnect();
-      try {
-        for(const card of cards) { placeImportedCard(s,card); s.imported.set(card.id,card); mountLoadedMenu(s,card,config); }
-        s.loadedPages.add(page);
-        if(page>=s.loadedThrough) { s.nextURL=nextPage(doc,s,page); s.loadedThrough=page; }
-        if(restoring) s.restorePages.shift();
-      } finally { observe(); }
-      refresh();
+      if(restoring) s.restorePages.shift();
+      importTopicPage(s,doc,page,false);
     } catch(error) {
       if(state===s && !controller.signal.aborted) { s.loadError=error.message; s.retryAfter=Date.now()+5000; }
       else if(state===s && route()?.topic===s.topic) { s.loadError='请求超时'; s.retryAfter=Date.now()+5000; }
@@ -7817,6 +7843,86 @@ function installThreadedReading() {
         if(!s.loadError) requestAnimationFrame(()=>{ if(state===s) { if(s.restorePages.length) loadNext(s); else maybeLoad(s); } });
       }
     }
+  }
+  async function fetchTopicPage(s,url,page,controller) {
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    const final=new URL(response.url || url,location.href);
+    if(final.origin!==location.origin || final.pathname.replace(/\/$/,'')!==`/post-${s.topic}-${page}`) throw new Error('分页跳转异常');
+    const doc=new DOMParser().parseFromString(await response.text(),'text/html');
+    if(!doc.querySelector('ul.comments')) throw new Error('未取得评论，请先完成站点登录或验证');
+    return doc;
+  }
+  // 把取回页面里还没有的楼层插进当前列表；live=true 时标成新回复（顶栏「N 条新回复 · 定位」）。
+  function importTopicPage(s,doc,page,live) {
+    const config=pageConfig(doc);
+    const existing=new Set([...s.list.querySelectorAll(':scope > li.content-item')].map(n=>n.id));
+    const cards=[];
+    for(const remote of doc.querySelectorAll('ul.comments > li.content-item')) {
+      if(!/^\d+$/.test(remote.id) || Number(remote.id)<=0 || existing.has(remote.id)) continue;
+      if(!remote.querySelector('article.post-content')) continue;
+      const card=document.importNode(remote,true); sanitizeCard(card,page,s.topic);
+      existing.add(card.id); s.known.add(Number(card.id)); cards.push(card);
+      if(live) s.pending.add(Number(card.id));
+    }
+    observer.disconnect();
+    try {
+      for(const card of cards) { placeImportedCard(s,card); s.imported.set(card.id,card); mountLoadedMenu(s,card,config); }
+      s.loadedPages.add(page);
+      if(page>=s.loadedThrough) { s.nextURL=nextPage(doc,s,page); s.loadedThrough=page; }
+    } finally { observe(); }
+    refresh();
+    return cards.length;
+  }
+
+  // 回复自动更新：读到末页后，标签页可见时每 20 秒左右拉一次已加载的最后一页，
+  // 新楼层直接插进列表（带原生菜单）；连续没有新回复逐步放慢到 90 秒，有新回复恢复。
+  // 末页写满出现下一页时交给下滑自动加载接着取。
+  const LIVE_REPLY_BASE=20000, LIVE_REPLY_STEP=10000, LIVE_REPLY_MAX=90000;
+  function liveEnabled() { return featureEnabled('threadedReading') && featureEnabled('liveReplies'); }
+  function scheduleLive(s,delay) {
+    clearTimeout(s.liveTimer); s.liveTimer=0;
+    if(state!==s || !liveEnabled()) return;
+    const wait=delay ?? Math.min(LIVE_REPLY_MAX,LIVE_REPLY_BASE+(s.liveIdle||0)*LIVE_REPLY_STEP);
+    s.liveTimer=setTimeout(()=>{ s.liveTimer=0; checkLatest(s,false); },wait);
+  }
+  function setCheckLabel(s,text,title='') {
+    if(!s.check) return;
+    s.check.textContent=text; s.check.title=title || (liveEnabled()?'已开启回复自动更新；点击立即检查最后一页':'检查当前已加载的最后一页是否出现新回复');
+    clearTimeout(s.checkLabelTimer);
+    if(text!=='检查新回复' && text!=='检查中…') s.checkLabelTimer=setTimeout(()=>{ if(s.check?.textContent===text) setCheckLabel(s,'检查新回复'); },4000);
+  }
+  async function checkLatest(s,manual) {
+    if(state!==s) return 0;
+    if(!manual && (document.hidden || !liveEnabled())) { scheduleLive(s); return 0; }
+    if(s.loading || s.restorePages.length) { if(!manual) scheduleLive(s,5000); return 0; }
+    // 还没读到末页：手动点就接着加载下一页，自动检查等用户下滑。
+    if(s.nextURL) { if(manual) loadNext(s); else scheduleLive(s); return 0; }
+    clearTimeout(s.liveTimer); s.liveTimer=0;
+    s.loading=true; s.lastLiveCheck=Date.now();
+    if(manual) { s.check.disabled=true; setCheckLabel(s,'检查中…'); }
+    const page=s.loadedThrough, controller=new AbortController(); s.loadController=controller;
+    const timeout=setTimeout(()=>controller.abort(),12000);
+    let added=0;
+    try {
+      const doc=await fetchTopicPage(s,`/post-${s.topic}-${page}`,page,controller);
+      if(state!==s || controller.signal.aborted || route()?.topic!==s.topic || route()?.page!==s.page) return 0;
+      added=importTopicPage(s,doc,page,true);
+      s.liveIdle=added?0:(s.liveIdle||0)+1;
+      if(added) persist(s);
+      if(manual || added) setCheckLabel(s,added?`新增 ${added} 条回复`:(s.nextURL?'有新分页 · 下滑加载':'末页暂无新增'));
+    } catch(error) {
+      s.liveIdle=(s.liveIdle||0)+1;
+      if(manual && state===s) setCheckLabel(s,'检查失败 · 重试',error.name==='AbortError'?'请求超时':error.message);
+    } finally {
+      clearTimeout(timeout); s.loading=false;
+      if(state===s) {
+        if(s.check) s.check.disabled=false;
+        loadingStatus(s); scheduleFrame(); scheduleLive(s);
+        if(s.nextURL) requestAnimationFrame(()=>{ if(state===s) maybeLoad(s); });
+      }
+    }
+    return added;
   }
   function maybeLoad(s) {
     if(!s?.loader.isConnected || document.hidden) return;
@@ -7843,6 +7949,7 @@ function installThreadedReading() {
     }
     loadingStatus(s);
     if(s.restorePages.length) queueMicrotask(()=>loadNext(s));
+    s.liveIdle=0; setCheckLabel(s,'检查新回复'); scheduleLive(s);
   }
 
   // A per-tab, one-use marker survives the native editor's reload or last-page redirect.
@@ -8121,31 +8228,9 @@ function installThreadedReading() {
     const check = el('button', '', '检查新回复');
     check.type = 'button';
     check.title = '检查当前已加载的最后一页是否出现新回复';
-    check.addEventListener('click', async () => {
-      if (check.dataset.reload) { location.reload(); return; }
-      check.disabled = true; check.textContent = '检查中…';
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-      try {
-        const response = await fetch(`/post-${s.topic}-${s.loadedThrough}`, { credentials:'same-origin', cache:'no-store', signal:controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
-        if (!doc.querySelector('.content-item[id="0"],ul.comments')) throw new Error('未取得帖子页面，请稍后重试');
-        const fresh = [...doc.querySelectorAll('ul.comments > li.content-item')].filter(n => /^\d+$/.test(n.id) && !s.known.has(Number(n.id)));
-        const next = [...doc.querySelectorAll('[aria-label="pagination"] a[href]')].some(a => {
-          const m = a.getAttribute('href').match(new RegExp(`^/post-${s.topic}-(\\d+)`));
-          return m && Number(m[1]) > s.maxPage;
-        });
-        if (state !== s) return;
-        if (fresh.length || next) {
-          check.textContent = fresh.length ? `发现 ${fresh.length} 条 · 刷新` : '有新增分页 · 刷新';
-          check.dataset.reload = '1';
-        } else check.textContent = '末页暂无新增';
-      } catch (error) {
-        check.textContent = '检查失败 · 重试'; check.title = error.name === 'AbortError' ? '请求超时' : error.message;
-      } finally { clearTimeout(timeout); check.disabled = false; }
-    });
-    bar.append(check);
+    // 新回复直接插进列表，不再整页刷新。
+    check.addEventListener('click', () => { void checkLatest(s,true); });
+    s.check = check; bar.append(check);
     s.status = el('span', 'nst-status'); bar.append(s.status);
     const progress = el('div', 'nst-progress');
     progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-label', '本页阅读进度');
@@ -8252,6 +8337,7 @@ function installThreadedReading() {
   function cleanup() {
     if (!state) return;
     persist(state);
+    clearTimeout(state.liveTimer); clearTimeout(state.checkLabelTimer);
     state.loadController?.abort(); state.intersection?.disconnect(); state.editorResize?.disconnect();
     state.nativeMenus?.forEach(menu=>menu.$destroy?.());
     const records=pageWindow().__config__?.postData?.comments;
@@ -8399,6 +8485,14 @@ function installThreadedReading() {
     if (!event.repeat) openEditor(s,true);
   },true);
   document.addEventListener('nsit:open-reply-editor', () => openEditor(state));
+  // 快速回复、抽奖自动回复通过接口发完后立即拉一次，自己的回复马上出现。
+  document.addEventListener('nsit:check-new-replies', () => { if (state && liveEnabled()) void checkLatest(state,true); });
+  // 切回标签页时，距上次检查超过一个周期就立即补查一次。
+  document.addEventListener('visibilitychange', () => {
+    const s = state;
+    if (!s || document.hidden || !liveEnabled() || s.loading) return;
+    if (Date.now() - (s.lastLiveCheck || 0) >= LIVE_REPLY_BASE) void checkLatest(s,false);
+  });
   document.addEventListener('click',rememberReplyContext,true);
   document.addEventListener('submit',rememberReplyContext,true);
   document.addEventListener('nsit:reveal-floor', event => revealFloor(event.detail?.floor));
@@ -9178,11 +9272,16 @@ function replyEditor() {
     app._nsitEditor = editor;
     const closeButton = app.querySelector('.nsit-shell [data-action="close"]');
     if (closeButton) closeButton.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
-    const privateMessageToolbar = editor.closest('.message-input')
+    // 私信页：站点默认关着 Markdown，带 .mde-toolbar 的那块整体被 v-show 隐藏，挂在里面
+    // 就看不到。改挂到始终显示的底部「Markdown 开关 / 发送」栏，放在发送按钮左边。
+    const messageBox = editor.closest('.message-input');
+    const privateMessageSend = messageBox ? privateMessageSendButton(messageBox) : null;
+    const privateMessageToolbar = messageBox && !privateMessageSend
       ? editor.closest('#code-mirror-editor')?.closest('.cm-wrapper')?.previousElementSibling
       : null;
     const insidePrivateMessageToolbar = Boolean(privateMessageToolbar?.matches('.mde-toolbar'));
-    if (insidePrivateMessageToolbar) privateMessageToolbar.append(app);
+    if (privateMessageSend) { app.classList.add('nsit-message-bar'); privateMessageSend.before(app); }
+    else if (insidePrivateMessageToolbar) privateMessageToolbar.append(app);
     else {
       const hint = document.querySelector('#editor-body .window_header a[href*="runoob.com/markdown"]');
       if (hint?.parentElement) hint.parentElement.prepend(app);
